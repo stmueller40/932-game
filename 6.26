@@ -1,0 +1,2167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>932 Ackerman: Rent Quest</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  :root{
+    --navy:#101A33; --navy2:#1B2A4A; --orange:#F76900; --orange2:#FF8C2E;
+    --cream:#F2E9D8; --grass:#3E7C4F; --road:#2C3142; --brick:#8C4A3C;
+    --good:#4CC36B; --bad:#E2504C; --panel:#0B1226;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%;}
+  body{
+    background:var(--navy); color:var(--cream);
+    font-family:'IBM Plex Mono', monospace;
+    display:flex; flex-direction:column; align-items:center;
+    overflow:hidden; touch-action:none;
+  }
+  h1,h2,h3,.pixel{font-family:'Press Start 2P', monospace;}
+  #app{width:100%; max-width:980px; height:100%; display:flex; flex-direction:column; padding:8px;}
+
+  /* ---------- SCREENS ---------- */
+  .screen{display:none; flex:1; flex-direction:column; overflow:auto;}
+  .screen.active{display:flex;}
+
+  /* Title / character select */
+  #titleScreen{align-items:center; text-align:center; gap:14px; padding:18px 8px;}
+  #titleScreen h1{color:var(--orange); font-size:clamp(16px,4vw,30px); line-height:1.5; text-shadow:3px 3px 0 #000;}
+  #titleScreen .sub{color:var(--cream); opacity:.85; font-size:13px; max-width:560px;}
+  #modePicker{display:flex; gap:12px; flex-wrap:wrap; justify-content:center; width:100%; max-width:720px;}
+  .modeBtn{flex:1; min-width:240px; background:var(--navy2); border:3px solid #33415f; color:var(--cream);
+    padding:14px 16px; cursor:pointer; font-family:inherit; display:flex; flex-direction:column; gap:6px;
+    transition:transform .08s, border-color .08s, box-shadow .08s;}
+  .modeBtn:hover{transform:translate(-2px,-2px); box-shadow:4px 4px 0 #000;}
+  .modeBtn.active{border-color:var(--orange); box-shadow:0 0 0 2px var(--orange) inset, 4px 4px 0 #000;}
+  .modeBtn .mTitle{font-family:'Press Start 2P'; font-size:12px; color:var(--orange2);}
+  .modeBtn .mDesc{font-size:12px; opacity:.85; line-height:1.4;}
+  .marquee{
+    border:3px solid var(--orange); background:var(--navy2); padding:10px 16px;
+    box-shadow:0 0 0 3px #000, 6px 6px 0 #000;
+  }
+  #charGrid{
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+    gap:10px; width:100%; max-width:920px;
+  }
+  .charCard{
+    background:var(--navy2); border:2px solid #33415f; padding:12px;
+    cursor:pointer; text-align:left; transition:transform .08s, border-color .08s;
+    color:var(--cream); font-family:inherit;
+  }
+  .charCard:hover,.charCard:focus-visible{border-color:var(--orange); transform:translate(-2px,-2px); outline:none; box-shadow:4px 4px 0 #000;}
+  .charCard .face{font-size:30px;}
+  .spriteImg{display:block; margin:0 auto 2px; }
+  .charCard .nm{font-family:'Press Start 2P'; font-size:12px; color:var(--orange2); margin:8px 0 6px;}
+  .charCard .pw{font-size:12px; line-height:1.45; opacity:.9;}
+  .charCard .tasks{font-size:10px; margin-top:6px; color:#9fb0d6;}
+
+  /* ---------- GAME ---------- */
+  #gameScreen{gap:6px;}
+  #hud{
+    display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+    background:var(--panel); border:3px solid var(--orange);
+    padding:8px 12px; box-shadow:4px 4px 0 #000;
+  }
+  #hud .pixel{font-size:11px;}
+  #hudName{color:var(--orange2);}
+  #hudCash{color:var(--good);}
+  #rentWrap{flex:1; min-width:160px;}
+  #rentBarOuter{height:14px; background:#000; border:2px solid var(--cream); margin-top:4px;}
+  #rentBarInner{height:100%; width:0%; background:linear-gradient(90deg,var(--orange),var(--orange2)); transition:width .3s;}
+  #hud button{font-family:'Press Start 2P'; font-size:9px; padding:8px 10px; background:var(--orange); color:#000; border:2px solid #000; cursor:pointer;}
+  #hud button:disabled{opacity:.4; cursor:default;}
+
+  #mapWrap{position:relative; flex:1; min-height:0; border:3px solid #000; background:#000;}
+  canvas#map{width:100%; height:100%; display:block; image-rendering:pixelated;}
+  #prompt{
+    position:absolute; left:50%; bottom:14px; transform:translateX(-50%);
+    background:var(--panel); border:2px solid var(--orange); padding:8px 14px;
+    font-size:12px; display:none; text-align:center; max-width:90%;
+  }
+  #prompt .pixel{font-size:10px; color:var(--orange2);}
+  #toast{
+    position:absolute; left:50%; top:12px; transform:translateX(-50%);
+    background:#000c; border:2px solid var(--cream); padding:8px 14px; font-size:12px;
+    display:none; max-width:92%; text-align:center;
+  }
+
+  /* touch controls */
+  #pad{position:absolute; right:10px; bottom:10px; display:grid;
+    grid-template-columns:repeat(3,46px); grid-template-rows:repeat(2,46px); gap:6px; opacity:.85;}
+  #pad button{background:var(--navy2); border:2px solid var(--orange); color:var(--cream); font-size:18px; cursor:pointer; user-select:none;}
+  #pad .up{grid-column:2;} #pad .left{grid-column:1; grid-row:2;} #pad .down{grid-column:2; grid-row:2;} #pad .right{grid-column:3; grid-row:2;}
+  #enterBtn{position:absolute; left:10px; bottom:10px; font-family:'Press Start 2P'; font-size:10px;
+    padding:14px 16px; background:var(--orange); border:2px solid #000; color:#000; cursor:pointer; display:none;}
+
+  /* ---------- MINIGAME MODAL ---------- */
+  #modal{
+    position:fixed; inset:0; background:#000a; display:none;
+    align-items:center; justify-content:center; z-index:50; padding:12px;
+  }
+  #modal.active{display:flex;}
+  #modalBox{
+    background:var(--navy2); border:3px solid var(--orange); box-shadow:8px 8px 0 #000;
+    width:100%; max-width:560px; max-height:92vh; overflow:auto; padding:18px;
+  }
+  #modalBox h2{font-size:13px; color:var(--orange2); line-height:1.6; margin-bottom:10px;}
+  #modalBody{font-size:13px; line-height:1.5;}
+  .mgBtn{
+    font-family:'Press Start 2P'; font-size:10px; padding:12px 14px; margin:6px 4px 0 0;
+    background:var(--orange); color:#000; border:2px solid #000; cursor:pointer;
+  }
+  .mgBtn.alt{background:var(--navy); color:var(--cream); border-color:var(--cream);}
+  .choice{display:block; width:100%; text-align:left; background:var(--navy); color:var(--cream);
+    border:2px solid #33415f; padding:10px; margin-top:8px; font-family:inherit; font-size:13px; cursor:pointer;}
+  .choice:hover{border-color:var(--orange);}
+  .barOuter{height:26px; background:#000; border:2px solid var(--cream); position:relative; margin:12px 0;}
+  .barFill{height:100%; background:var(--good); width:0%;}
+  .zone{position:absolute; top:0; height:100%; background:#4CC36B66; border-left:2px solid var(--good); border-right:2px solid var(--good);}
+  .cursor{position:absolute; top:-4px; width:4px; height:34px; background:var(--orange);}
+  .padGrid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px;}
+  .beatPad{height:70px; border:3px solid #000; cursor:pointer; opacity:.85; font-size:26px;}
+  .beatPad.lit{filter:brightness(2.2); transform:scale(.96);}
+  .stepBtn{font-family:inherit; font-size:13px; padding:10px; margin:6px 6px 0 0; background:var(--navy);
+    color:var(--cream); border:2px solid #33415f; cursor:pointer;}
+  .stepBtn:disabled{opacity:.35;}
+  .big{font-family:'Press Start 2P'; font-size:18px; color:var(--orange2);}
+  canvas#dodge{width:100%; background:#1a0f1f; border:2px solid var(--cream); display:block; margin-top:10px;}
+  .timer{font-family:'Press Start 2P'; font-size:11px; color:var(--bad);}
+
+  /* win screen */
+  #winScreen{align-items:center; justify-content:center; text-align:center; gap:18px;}
+  #winScreen h1{color:var(--orange); font-size:clamp(16px,4vw,28px); line-height:1.6; text-shadow:3px 3px 0 #000;}
+  #winScreen p{max-width:520px; font-size:14px; line-height:1.6;}
+
+  /* ---------- 3D ARENA (78 Cup) ---------- */
+  #arena{position:fixed; inset:0; z-index:60; background:#0a0614; overflow:hidden;}
+  #arenaCanvas{position:absolute; inset:0; width:100%; height:100%; display:block; touch-action:none; cursor:crosshair;}
+  #crosshair{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+    color:#fff; font-size:26px; font-family:monospace; opacity:.85; pointer-events:none; text-shadow:0 0 5px #000,0 0 5px #000;}
+  #arenaTop{position:absolute; top:10px; left:10px; right:96px; display:flex; align-items:center; gap:12px; pointer-events:none; flex-wrap:wrap;}
+  #arenaHp{flex:1; min-width:150px;}
+  #arenaHpLabel{font-family:'Press Start 2P'; font-size:10px; color:#fff; text-shadow:1px 1px 0 #000;}
+  #arena .abar{height:14px; background:#000; border:2px solid #F2E9D8; margin-top:4px;}
+  #arenaHpFill{height:100%; width:100%; background:#c0392b; transition:width .2s;}
+  #arenaHearts{font-size:18px;}
+  #arenaPhase{font-family:'Press Start 2P'; font-size:9px; color:#FF8C2E; text-shadow:1px 1px 0 #000;}
+  #arenaHurt{position:absolute; inset:0; background:#E2504C; opacity:0; transition:opacity .12s; pointer-events:none;}
+  #arenaHint{position:absolute; bottom:14px; left:50%; transform:translateX(-50%);
+    font-family:'IBM Plex Mono'; font-size:12px; color:#F2E9D8; background:#000a; padding:6px 12px;
+    border:2px solid #F76900; text-align:center; max-width:92%; pointer-events:none;}
+  #arenaFlee{position:absolute; top:10px; right:10px; font-family:'Press Start 2P'; font-size:9px;
+    padding:8px; background:#1B2A4A; color:#fff; border:2px solid #F76900; cursor:pointer;}
+  #arenaPad{position:absolute; left:14px; bottom:14px; display:grid;
+    grid-template-columns:repeat(3,46px); grid-template-rows:repeat(2,46px); gap:5px;}
+  #arenaPad .apad{border:2px solid #F76900; color:#fff; font-size:18px; background:#1B2A4Acc; cursor:pointer;}
+  #arenaPad .apad.f{grid-column:2; grid-row:1;} #arenaPad .apad.l{grid-column:1; grid-row:2;}
+  #arenaPad .apad.b{grid-column:2; grid-row:2;} #arenaPad .apad.r{grid-column:3; grid-row:2;}
+  #arenaFire{position:absolute; right:14px; bottom:14px; font-family:'Press Start 2P'; font-size:11px;
+    padding:20px 16px; background:#F76900; color:#000; border:2px solid #000; cursor:pointer;}
+
+  /* ---------- PHASE 2 SIDESCROLLER ---------- */
+  #p2Screen{gap:6px;}
+  #p2hud{display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+    background:var(--panel); border:3px solid var(--orange); padding:8px 12px; box-shadow:4px 4px 0 #000;}
+  #p2hud .pixel{font-size:11px;}
+  #p2Name{color:var(--orange2);} #p2Hearts{color:var(--bad);} #p2Coins{color:#ffd34d;}
+  #p2Dist{flex:1; min-width:80px; color:#9fb0d6;}
+  #p2hud button{font-family:'Press Start 2P'; font-size:9px; padding:8px 10px; background:var(--orange); color:#000; border:2px solid #000; cursor:pointer;}
+  #p2Wrap{position:relative; flex:1; min-height:0; border:3px solid #000; background:#000;}
+  #p2canvas{width:100%; height:100%; display:block; image-rendering:pixelated;}
+  #p2pad{position:absolute; inset:0; pointer-events:none;}
+  #p2pad .p2btn{position:absolute; bottom:14px; pointer-events:auto; font-family:'Press Start 2P';
+    background:#1B2A4Acc; border:2px solid var(--orange); color:#fff; cursor:pointer; user-select:none;}
+  #p2pad .p2btn[data-k="left"]{left:14px; width:56px; height:56px; font-size:18px;}
+  #p2pad .p2btn[data-k="right"]{left:78px; width:56px; height:56px; font-size:18px;}
+  #p2pad .p2btn.jump{right:14px; width:96px; height:56px; font-size:11px; background:#F76900cc; color:#000;}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- TITLE / CHARACTER SELECT -->
+  <div class="screen active" id="titleScreen">
+    <div class="marquee">
+      <h1>932 ACKERMAN<br>RENT QUEST</h1>
+    </div>
+    <div id="modePicker">
+      <button class="modeBtn active" id="modeRent" data-mode="rent">
+        <span class="mTitle">💸 PAY YOUR RENT</span>
+        <span class="mDesc">Hustle minigames around Syracuse for $1,000 + beat the bosses</span>
+      </button>
+      <button class="modeBtn" id="modeClass" data-mode="class">
+        <span class="mTitle">🎓 GET TO CLASS</span>
+        <span class="mDesc">Mario-style sprint to Whitman — dodge buses, grab the mushroom</span>
+      </button>
+    </div>
+    <p class="sub" id="titleSub">Rent is due at 932 Ackerman Ave and OPR Property Managers doesn't take IOUs.
+    Hustle around Syracuse, win minigames, stack <b style="color:var(--good)">$1,000</b>, and pay up.
+    Pick your housemate &mdash; each has a power that unlocks certain gigs.</p>
+    <div id="charGrid"></div>
+  </div>
+
+  <!-- GAME -->
+  <div class="screen" id="gameScreen">
+    <div id="hud">
+      <span class="pixel" id="hudName">—</span>
+      <span class="pixel" id="hudCash">$0</span>
+      <div id="rentWrap">
+        <span class="pixel" style="font-size:9px;">RENT: $1,000</span>
+        <div id="rentBarOuter"><div id="rentBarInner"></div></div>
+      </div>
+      <button id="quitBtn">SWITCH CHAR</button>
+    </div>
+    <div id="mapWrap">
+      <canvas id="map"></canvas>
+      <div id="prompt"></div>
+      <div id="toast"></div>
+      <button id="enterBtn">ENTER</button>
+      <div id="pad">
+        <button class="up" data-d="up">▲</button>
+        <button class="left" data-d="left">◀</button>
+        <button class="down" data-d="down">▼</button>
+        <button class="right" data-d="right">▶</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- WIN -->
+  <div class="screen" id="winScreen">
+    <h1>RENT PAID!<br>932 LIVES ON</h1>
+    <div style="font-size:54px;">🏠🍊🎉</div>
+    <div id="unlockBanner" style="display:none; border:3px solid var(--orange); background:var(--navy2);
+      box-shadow:0 0 0 3px #000,6px 6px 0 #000; padding:14px 18px; max-width:520px;">
+      <div class="pixel" style="font-size:12px; color:var(--orange2); line-height:1.6;">🔓 NEW CHARACTER UNLOCKED</div>
+      <div style="font-size:40px; margin:8px 0;">🌱</div>
+      <div class="pixel" style="font-size:14px; color:var(--cream);">RACHAEL</div>
+      <p style="font-size:12px; margin-top:8px; opacity:.9;">Rex's skating finally won over the house's old
+      sustainability-major roommate. She's now on the character select screen — fast as anything, and she'll
+      do every gig in town except set foot in Whitman.</p>
+    </div>
+    <p id="winText"></p>
+    <button class="mgBtn" id="phase2Btn" style="background:var(--orange2);">🎓 TRY "GET TO CLASS"</button>
+    <button class="mgBtn alt" id="playAgainBtn">↩ BACK TO MENU</button>
+  </div>
+
+  <!-- PHASE 2: SIDESCROLLER -->
+  <div class="screen" id="p2Screen">
+    <div id="p2hud">
+      <span class="pixel" id="p2Name">—</span>
+      <span class="pixel" id="p2Hearts">❤❤❤</span>
+      <span class="pixel" id="p2Coins">🪙 0</span>
+      <span class="pixel" id="p2Dist">→ WHITMAN</span>
+      <button id="p2Quit">QUIT</button>
+    </div>
+    <div id="p2Wrap">
+      <canvas id="p2canvas"></canvas>
+      <div id="p2pad">
+        <button class="p2btn" data-k="left">◀</button>
+        <button class="p2btn" data-k="right">▶</button>
+        <button class="p2btn jump" data-k="jump">⤴ JUMP</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PHASE 2 WIN -->
+  <div class="screen" id="p2WinScreen" style="align-items:center;justify-content:center;text-align:center;gap:18px;">
+    <h1 style="color:var(--orange); font-size:clamp(16px,4vw,28px); line-height:1.6; text-shadow:3px 3px 0 #000;">MADE IT TO CLASS!</h1>
+    <div style="font-size:54px;">📈🎓🍊</div>
+    <p id="p2WinText" style="max-width:520px; font-size:14px; line-height:1.6;"></p>
+    <button class="mgBtn" id="p2Replay">RUN IT AGAIN</button>
+    <button class="mgBtn alt" id="p2Home">↩ BACK TO MENU</button>
+  </div>
+</div>
+
+<!-- MINIGAME MODAL -->
+<div id="modal"><div id="modalBox">
+  <h2 id="modalTitle"></h2>
+  <div id="modalBody"></div>
+</div></div>
+
+<script>
+/* =====================  DATA  ===================== */
+const RENT = 1000;
+
+const CHARS = [
+  {id:'cavan',  name:'CAVAN',  face:'💪', speed:2.6, powers:['strength'],
+   desc:'Strength. Carries kegs like groceries.',
+   look:{skin:'#f0c8a0',hair:'#b08545',hairStyle:'short',shirt:'#c8ccd2',pants:'#3a4a63',h:1.06,build:'athletic',item:'phone'}},
+  {id:'slater', name:'SLATER', face:'🎧', speed:2.6, powers:['music'],
+   desc:'Impeccable music taste. Never loses the aux.',
+   look:{skin:'#f0c8a0',hair:'#4a3322',hairStyle:'wavy',shirt:'#5a6e8c',pants:'#2e3850',h:1.0,build:'skinny',item:'headphones'}},
+  {id:'mark',   name:'MARK',   face:'🥸', speed:3.1, powers:['strength','speed'],
+   desc:'Super strength + moderate speed. The mustache adds torque.',
+   look:{skin:'#f0c8a0',hair:'#5a4326',hairStyle:'short',shirt:'#7a8c3a',pants:'#46402e',h:1.06,build:'wide',item:'dumbbell',stache:true}},
+  {id:'skinner',name:'SKINNER',face:'🍕', speed:2.6, powers:['stomach'],
+   desc:'Iron Stomach. Varsity fears him.',
+   look:{skin:'#f2d6b8',hair:'#e8d48a',hairStyle:'wavy',shirt:'#ffffff',jacket:'#b8bcc4',pants:'#46506a',h:1.08,build:'skinny',item:'soda'}},
+  {id:'blake',  name:'BLAKE',  face:'🤝', speed:2.6, powers:['closer'],
+   desc:'The Closer. Bowtie-grade persuasion.',
+   look:{skin:'#f2d2b0',hair:'#e8612a',hairStyle:'short',shirt:'#2e6fd9',pants:'#1a1a1a',h:1.0,build:'normal',item:'foilhat'}},
+  {id:'rex',    name:'REX',    face:'🛹', speed:3.8, powers:['handy','speed'],
+   desc:'Skates everywhere, fixes anything.',
+   look:{skin:'#f0c8a0',hair:'#4a3322',hairStyle:'wavy',shirt:'#9a9ea4',flannel:'#b5462e',pants:'#6b6450',h:1.0,build:'skinny',item:'skateboard',stache:true}},
+  {id:'scott',  name:'SCOTT',  face:'🍊', speed:2.9, powers:['all'],
+   desc:'Generalist. Mario rules: can do every task, masters none.',
+   look:{skin:'#f0c8a0',hair:'#e8d48a',hairStyle:'short',shirt:'#1a1a1a',pants:'#6b9bd2',shoes:'#ffffff',h:1.02,build:'normal'}},
+  {id:'liam',   name:'LIAM',   face:'🧠', speed:2.6, powers:['brain'],
+   desc:'Intelligence. Whitman case-comp menace.',
+   look:{skin:'#f2d6b8',hair:'#b08545',hairStyle:'cap',shirt:'#4a4e56',pants:'#3a3e46',shoes:'#ffffff',h:1.12,build:'skinny'}},
+  {id:'rachael',name:'RACHAEL',face:'🌱', speed:3.8, powers:['speed'], locked:true,
+   desc:'Sustainability major who moved into 932 when COVID shut her school down. Pure speed — but won\'t set foot in Whitman.',
+   noWhitman:true,
+   look:{skin:'#f2d6b8',hair:'#4a3322',hairStyle:'long',shirt:'#1a1a1a',pants:'#1a1a1a',h:1.0,build:'skinny',item:'leaf'}},
+];
+
+/* world is 1300 x 860 */
+const PLACES = [
+  {id:'home',     name:'932 Ackerman Ave',     emoji:'🏠', x:1000,y:660,w:150,h:110, col:'#8C4A3C',
+   task:'chores', req:null, label:'HOME'},
+  {id:'opr',      name:'OPR Property Mgrs',    emoji:'🗂️', x:790, y:660,w:140,h:110, col:'#5d6b8c',
+   task:'lease',  req:'closer'},
+  {id:'euclid',   name:'318 Euclid House',     emoji:'🛠️', x:560, y:470,w:150,h:100, col:'#6e5a3e',
+   task:'porch',  req:'handy'},
+  {id:'whitman',  name:'Whitman School of Mgmt',emoji:'📈', x:980, y:90, w:220,h:130, col:'#3a4f7a',
+   task:'case',   req:'brain'},
+  {id:'dome',     name:'The Dome',             emoji:'🏟️', x:120, y:80, w:240,h:150, col:'#d8d2c2',
+   task:'haul',   req:'strength', dark:true},
+  {id:'varsity',  name:'Varsity Pizza',        emoji:'🍕', x:480, y:120,w:150,h:100, col:'#a33b2e',
+   task:'pizza',  req:'stomach'},
+  {id:'bleu',     name:'Bleu Monkey',          emoji:'🎵', x:690, y:120,w:140,h:100, col:'#2e5fa3',
+   task:'aux',    req:'music'},
+  {id:'djs',      name:"DJ's on the Hill",     emoji:'🪩', x:848, y:120,w:75, h:100, col:'#5e3a8c',
+   task:'frogger',req:null},
+  {id:'jimmy',    name:"Jimmy John's",         emoji:'🚴', x:480, y:280,w:130,h:80,  col:'#c0392b',
+   task:'dash',   req:'speed'},
+  {id:'marg',     name:"Margarita's Cantina",  emoji:'🍹', x:110, y:620,w:170,h:110, col:'#2a7d52',
+   task:'covid',  req:null},
+];
+
+const TASKS = {
+  chores:{title:'HOUSE CHORES', pay:60,  blurb:'Rake the yard before OPR drives by. Anyone can do it.'},
+  lease: {title:'CLOSE THE LEASE', pay:220, blurb:'OPR needs someone to sell a tour group on a 6-bed. Closer energy required.'},
+  porch: {title:'PORCH FIX',  pay:200, blurb:"318 Euclid's porch is one party from collapse. Handywork required."},
+  case:  {title:'CASE COMPETITION', pay:230, blurb:'Whitman flash case comp. Intelligence required.'},
+  haul:  {title:'EQUIPMENT HAUL', pay:210, blurb:'Haul turf rolls and weight racks into the Dome. Strength required.'},
+  pizza: {title:'PIZZA EATING CONTEST', pay:190, blurb:'Varsity slice gauntlet. Iron stomach required.'},
+  aux:   {title:'AUX CORD HERO', pay:190, blurb:'Out-DJ the Bleu Monkey crowd. Music taste required.'},
+  dash:  {title:'DELIVERY DASH', pay:240, blurb:'Freaky-fast sandwich run across the neighborhood. Speed required.'},
+  covid: {title:'COVID DODGE', pay:170, blurb:'Collect tips at Margarita\'s while dodging cough clouds. Open to all — speed helps.'},
+  frogger:{title:'FAKE ID FROGGER', pay:180, blurb:'Cross the packed bar at DJ\'s, grab a drink, and get back out — without a bouncer clocking your fake. Open to all — speed helps.'},
+};
+const POWER_NAMES = {strength:'STRENGTH', music:'MUSIC TASTE', stomach:'IRON STOMACH',
+  closer:'CLOSER', handy:'HANDYWORK', speed:'SPEED', brain:'INTELLIGENCE'};
+
+/* =====================  STATE  ===================== */
+let player=null, cash=0, px=1075, py=820, keys={}, nearPlace=null, payCount={}, busy=false;
+let dashTarget=null, dashDeadline=0;
+let owFace=1, owWalk=0, owMoving=false;   /* overworld sprite facing + walk-cycle */
+
+const $=id=>document.getElementById(id);
+const canvas=$('map'), ctx=canvas.getContext('2d');
+const W=1300,H=860;
+
+/* =====================  PIXEL SPRITE ENGINE  =====================
+   Draws a ~16x24 "pixel" person procedurally from a character's look palette.
+   drawSprite(ctx, look, cx, baseY, px, frame, face): cx=center x, baseY=feet y,
+   px=pixel size, frame=0..3 walk cycle, face=1/-1.  Animates legs+arms. */
+function drawSprite(g, look, cx, baseY, px, frame, face){
+  if(!look){ g.font=(px*16)+'px serif'; g.fillText('🙂',cx-px*8,baseY); return; }
+  face = face<0 ? -1 : 1;
+  const P=(gx,gy,w,h,col)=>{ // grid pixel: column gx,row gy (top-left origin at sprite box)
+    g.fillStyle=col;
+    const X = face===1 ? (cx + (gx-8)*px) : (cx + (7-gx)*px);
+    g.fillRect(Math.round(X), Math.round(baseY-(24-gy)*px), Math.ceil(px*w), Math.ceil(px*h));
+  };
+  const skin=look.skin||'#f0c8a0', hair=look.hair||'#5a4326';
+  const shirt=look.shirt||'#888', pants=look.pants||'#333';
+  const shoes=look.shoes||'#222', dark='rgba(0,0,0,0.18)';
+  const f=frame&3;                       // 0,1,2,3 -> step phases
+  const legA = (f===1), legB=(f===3);    // alternate stride; f0/f2 neutral
+  const bob = (f===1||f===3)?1:0;        // tiny vertical bob during stride
+  const yo=-bob;                         // shift body up by bob via row offsets handled below
+
+  // === HEAD (rows ~2-7) ===
+  // hair back / base
+  P(5,2+yo,6,5,hair);
+  // face
+  P(5,4+yo,6,4,skin);
+  P(5,7+yo,6,1,skin);
+  // hair styles on top
+  if(look.hairStyle==='long'){ P(4,3+yo,1,8,hair); P(11,3+yo,1,8,hair); P(4,2+yo,8,2,hair); }
+  else if(look.hairStyle==='wavy'){ P(5,2+yo,6,2,hair); P(4,3+yo,1,3,hair); P(11,3+yo,1,3,hair); P(6,1+yo,4,1,hair); }
+  else if(look.hairStyle==='cap'){ // backwards hat
+    P(5,2+yo,6,2,'#2e3850'); P(4,3+yo,2,1,'#2e3850'); // strap area at back
+    P(5,3+yo,6,1,hair); }
+  else { P(5,2+yo,6,2,hair); P(4,3+yo,1,1,hair); P(11,3+yo,1,1,hair); } // short
+  // eyes
+  P(6,5+yo,1,1,'#222'); P(9,5+yo,1,1,'#222');
+  // mustache
+  if(look.stache){ P(6,7+yo,4,1,hair); }
+
+  // === BODY / outfit (rows ~8-15) ===
+  // torso (shirt)
+  P(5,8+yo,6,7,shirt);
+  P(4,9+yo,1,4,shirt); P(11,9+yo,1,4,shirt); // shoulders
+  // jacket overlay (open, shows shirt down the middle)
+  if(look.jacket){ P(4,8+yo,2,7,look.jacket); P(10,8+yo,2,7,look.jacket); }
+  // open flannel overlay
+  if(look.flannel){ P(4,8+yo,2,7,look.flannel); P(10,8+yo,2,7,look.flannel);
+    P(4,8+yo,2,1,look.flannel); P(10,8+yo,2,1,look.flannel); }
+  // subtle shading on one side
+  P(10,8+yo,1,7,dark);
+
+  // === ARMS (animate opposite to legs) ===
+  const armSwing = legA?1:(legB?-1:0);
+  // far arm
+  P(3,9+yo+ (armSwing>0?1:0),1,4,shirt);
+  P(3,13+yo+(armSwing>0?1:0),1,1,skin);
+  // near arm
+  P(12,9+yo+(armSwing<0?1:0),1,4,(look.jacket||look.flannel||shirt));
+  P(12,13+yo+(armSwing<0?1:0),1,1,skin);
+
+  // === LEGS (rows 15-21) ===
+  if(f===1){ // left stride
+    P(5,15+yo,3,6,pants); P(8,15+yo,3,5,pants);
+    P(4,21+yo,3,1,shoes); P(9,20+yo,3,1,shoes);
+  } else if(f===3){ // right stride
+    P(5,15+yo,3,5,pants); P(8,15+yo,3,6,pants);
+    P(4,20+yo,3,1,shoes); P(9,21+yo,3,1,shoes);
+  } else { // neutral stance
+    P(5,15+yo,3,6,pants); P(8,15+yo,3,6,pants);
+    P(4,21+yo,3,1,shoes); P(9,21+yo,3,1,shoes);
+  }
+
+  // === SIGNATURE ITEM (in near hand) ===
+  const item=look.item, ix=12, iy=13+yo+(armSwing<0?1:0);
+  if(item==='phone'){ P(ix,iy-1,1,2,'#111'); P(ix,iy-1,1,1,'#7cf'); }
+  else if(item==='dumbbell'){ P(ix,iy,2,1,'#888'); P(ix-1,iy-1,1,3,'#555'); P(ix+2,iy-1,1,3,'#555'); }
+  else if(item==='soda'){ P(ix,iy-1,1,2,'#9a1f2a'); P(ix,iy-1,1,1,'#ddd'); }
+  else if(item==='leaf'){ P(ix,iy-1,2,2,'#4CC36B'); P(ix+1,iy,1,1,'#2e7d52'); }
+  else if(item==='headphones'){ // white wired buds around neck (both shoulders)
+    P(4,8+yo,1,2,'#fff'); P(11,8+yo,1,2,'#fff'); P(4,10+yo,1,2,'#eee'); P(11,10+yo,1,2,'#eee'); }
+  else if(item==='foilhat'){ P(5,1+yo,6,1,'#cfd4da'); P(7,0+yo,2,1,'#cfd4da'); } // tinfoil hat peak
+  else if(item==='skateboard'){ // board under/near feet
+    g.fillStyle='#3a2a1a'; const bx=face===1?(cx-5*px):(cx-3*px);
+    g.fillRect(Math.round(bx),Math.round(baseY+px*0.5),Math.ceil(px*8),Math.ceil(px*1.2));
+    g.fillStyle='#111'; g.fillRect(Math.round(bx+px),Math.round(baseY+px*1.6),Math.ceil(px*1.4),Math.ceil(px*1.2));
+    g.fillRect(Math.round(bx+px*5),Math.round(baseY+px*1.6),Math.ceil(px*1.4),Math.ceil(px*1.2)); }
+}
+
+/* Classic 8-bit Mario sprite (red cap/shirt, blue overalls), 12x16 grid, animated */
+function drawMario(g, cx, baseY, px, frame, face){
+  face = face<0 ? -1 : 1;
+  const RED='#e23b2e', SKIN='#f0c8a0', BLUE='#2a52cc', BROWN='#7a3b18', YEL='#f2c040', DARK='#1a1a1a';
+  const P=(gx,gy,w,h,col)=>{ g.fillStyle=col;
+    const X = face===1 ? (cx+(gx-6)*px) : (cx+(5-gx)*px);
+    g.fillRect(Math.round(X), Math.round(baseY-(16-gy)*px), Math.ceil(px*w), Math.ceil(px*h)); };
+  const f=frame&3, legA=(f===1), legB=(f===3), yo=(f===1||f===3)?-0.0:0;
+  // cap
+  P(2,0,5,1,RED); P(1,1,1,1,RED); P(2,1,5,1,RED);
+  // face + hair
+  P(2,2,1,2,BROWN); P(3,2,4,2,SKIN); P(6,2,1,1,BROWN);
+  P(3,4,1,1,BROWN); P(4,4,2,2,SKIN); P(6,4,1,2,SKIN); // mustache+face
+  P(4,5,3,1,BROWN); // mustache
+  P(5,3,1,1,DARK);  // eye
+  // shirt/arms (red)
+  P(2,6,5,2,RED); P(1,7,1,2,RED); P(6,7,1,2,RED);
+  // overalls (blue)
+  P(3,7,3,3,BLUE); P(3,7,1,1,YEL); P(5,7,1,1,YEL); // straps buttons
+  P(2,8,5,2,BLUE);
+  // hands
+  P(1,9,1,1,SKIN); P(6,9,1,1,SKIN);
+  // legs (animate)
+  if(f===1){ P(2,10,2,4,BLUE); P(4,10,2,3,BLUE); P(1,14,2,1,BROWN); P(4,13,2,1,BROWN); }
+  else if(f===3){ P(2,10,2,3,BLUE); P(4,10,2,4,BLUE); P(1,13,2,1,BROWN); P(4,14,2,1,BROWN); }
+  else { P(2,10,2,4,BLUE); P(4,10,2,4,BLUE); P(1,14,2,1,BROWN); P(4,14,2,1,BROWN); }
+}
+
+/* Render a sprite to a standalone data-URL <img> for HTML cards/HUD */
+function spriteDataURL(look, px=5){
+  const c=document.createElement('canvas'); c.width=16*px; c.height=24*px+8*px;
+  const g=c.getContext('2d');
+  drawSprite(g, look, 8*px, 24*px, px, 0, 1);
+  return c.toDataURL();
+}
+function spriteImgTag(c, px=5){
+  if(!c.look) return `<div class="face">${c.face}</div>`;
+  return `<img class="spriteImg" src="${spriteDataURL(c.look,px)}" alt="${c.name}" style="image-rendering:pixelated;height:${(24*px+4*px)}px;">`;
+}
+
+
+/* =====================  CHARACTER SELECT  ===================== */
+function taskListFor(c){
+  return PLACES.filter(p=>canDo(c,p)).map(p=>p.emoji).join(' ');
+}
+function canDo(c,place){
+  /* Rachael: does everything except Whitman, despite no specialist power */
+  if(c.noWhitman){ return place.id!=='whitman'; }
+  if(!place.req) return true;
+  if(c.powers.includes('all')) return true;
+  return c.powers.includes(place.req);
+}
+
+let rachaelUnlocked=false;  /* session-only; re-earned by beating 78 Cup as Rex */
+const grid=$('charGrid');
+function renderChars(){
+  grid.innerHTML='';
+  CHARS.forEach(c=>{
+    if(c.locked && !rachaelUnlocked) return;   /* hidden until unlocked */
+    const b=document.createElement('button');
+    b.className='charCard';
+    const badge = c.locked ? `<span style="color:var(--orange2);font-size:9px;font-family:'Press Start 2P'"> ★ SECRET</span>` : '';
+    b.innerHTML=`${spriteImgTag(c)}<div class="nm">${c.name}${badge}</div>
+      <div class="pw">${c.desc}</div><div class="tasks">Gigs: ${taskListFor(c)}</div>`;
+    b.onclick=()=>{ if(selectedMode==='class'){ player=c; startPhase2FromSelect(); } else { startGame(c); } };
+    grid.appendChild(b);
+  });
+}
+renderChars();
+
+/* ---- mode picker (Pay Your Rent / Get to Class) ---- */
+let selectedMode='rent';
+const SUBTEXT={
+  rent:`Rent is due at 932 Ackerman Ave and OPR Property Managers doesn't take IOUs. `+
+       `Hustle around Syracuse, win minigames, stack <b style="color:var(--good)">$1,000</b>, and pay up. `+
+       `Pick your housemate — each has a power that unlocks certain gigs.`,
+  class:`You slept through your alarm and class starts NOW. Sprint across Syracuse to the Whitman School `+
+        `in a Mario-style sidescroller — stomp kegs and geese, dodge the CUSE bus and trolley, grab the `+
+        `🍄 mushroom to become Mario, and reach the door. Pick your runner — speed matters here.`
+};
+function setMode(m){
+  selectedMode=m;
+  document.querySelectorAll('.modeBtn').forEach(b=>b.classList.toggle('active', b.dataset.mode===m));
+  $('titleSub').innerHTML=SUBTEXT[m];
+}
+document.querySelectorAll('.modeBtn').forEach(b=> b.onclick=()=>setMode(b.dataset.mode));
+
+function startPhase2FromSelect(){
+  /* launch the sidescroller directly with the chosen character */
+  startPhase2();
+}
+
+function startGame(c){
+  player=c; cash=0; payCount={}; px=1075; py=820; dashTarget=null; landlordDown=false;
+  $('hudName').textContent=c.face+' '+c.name;
+  updateHUD();
+  show('gameScreen');
+  resize();
+  toast(`Welcome to the neighborhood, ${c.name}. Walk up to a building and press E (or ENTER) to work a gig. Pay rent at 932 once you have $${RENT}.`,6000);
+}
+function show(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  $(id).classList.add('active');
+}
+$('quitBtn').onclick=()=>{ show('titleScreen'); };
+$('playAgainBtn').onclick=()=>{ $('unlockBanner').style.display='none'; renderChars(); show('titleScreen'); };
+
+/* =====================  HUD  ===================== */
+function updateHUD(){
+  $('hudCash').textContent='$'+cash;
+  $('rentBarInner').style.width=Math.min(100,cash/RENT*100)+'%';
+}
+let toastT=null;
+function toast(msg,ms=3000){
+  const t=$('toast'); t.textContent=msg; t.style.display='block';
+  clearTimeout(toastT); toastT=setTimeout(()=>t.style.display='none',ms);
+}
+
+/* =====================  MAP RENDER  ===================== */
+function resize(){
+  const r=$('mapWrap').getBoundingClientRect();
+  canvas.width=W; canvas.height=H;
+}
+window.addEventListener('resize',resize);
+
+function drawMap(){
+  /* ground */
+  ctx.fillStyle='#3E7C4F'; ctx.fillRect(0,0,W,H);
+  /* subtle grass texture */
+  ctx.fillStyle='#377247';
+  for(let i=0;i<60;i++){ ctx.fillRect((i*97)%W,(i*211)%H,6,6); }
+
+  /* roads */
+  ctx.fillStyle='#2C3142';
+  ctx.fillRect(0,250,W,70);                 // Marshall-ish St (top)
+  ctx.fillRect(0,580,W,70);                 // Euclid Ave
+  ctx.fillRect(930,0,70,H);                 // Comstock Ave
+  ctx.fillRect(420,0,70,H);                 // Walnut-ish
+  ctx.fillRect(1180,250,70,H-250);          // Ackerman Ave
+  /* lane dashes */
+  ctx.fillStyle='#F2E9D8';
+  for(let x=10;x<W;x+=60){ ctx.fillRect(x,283,28,4); ctx.fillRect(x,613,28,4); }
+  for(let y=10;y<H;y+=60){ ctx.fillRect(963,y,4,28); ctx.fillRect(453,y,4,28); if(y>260)ctx.fillRect(1213,y,4,28); }
+
+  /* street labels */
+  ctx.fillStyle='#F2E9D8'; ctx.font='16px "Press Start 2P"'; ctx.globalAlpha=.55;
+  ctx.fillText('MARSHALL ST',20,243);
+  ctx.fillText('EUCLID AVE',20,573);
+  ctx.save(); ctx.translate(1238,330); ctx.rotate(Math.PI/2); ctx.fillText('ACKERMAN AVE',0,0); ctx.restore();
+  ctx.globalAlpha=1;
+
+  /* places */
+  PLACES.forEach(p=>{
+    const usable = player && canDo(player,p);
+    ctx.fillStyle=p.col;
+    ctx.fillRect(p.x,p.y,p.w,p.h);
+    ctx.strokeStyle='#000'; ctx.lineWidth=4; ctx.strokeRect(p.x,p.y,p.w,p.h);
+    /* roof stripe */
+    ctx.fillStyle= p.id==='home' ? '#F76900' : '#00000033';
+    ctx.fillRect(p.x,p.y,p.w,16);
+    /* door */
+    ctx.fillStyle='#000'; ctx.fillRect(p.x+p.w/2-12,p.y+p.h-26,24,26);
+    /* emoji */
+    ctx.font='34px serif'; ctx.fillText(p.emoji,p.x+p.w/2-18,p.y+p.h/2+6);
+    /* label */
+    ctx.font='12px "IBM Plex Mono"'; ctx.fillStyle='#F2E9D8';
+    ctx.fillText(p.name, p.x, p.y-8);
+    if(player && !usable){ ctx.fillStyle='#000a'; ctx.fillRect(p.x,p.y,p.w,p.h);
+      ctx.fillStyle='#E2504C'; ctx.font='11px "Press Start 2P"';
+      ctx.fillText('LOCKED',p.x+10,p.y+p.h/2);
+    }
+  });
+
+  /* dash target flag */
+  if(dashTarget){
+    ctx.font='40px serif';
+    ctx.fillText('🚩',dashTarget.x+dashTarget.w/2-20,dashTarget.y-18);
+  }
+
+  /* player */
+  if(player){
+    const frame = owMoving ? (Math.floor(owWalk)%4) : 0;
+    drawSprite(ctx, player.look, px, py+22, 2.1, frame, owFace);
+  }
+}
+
+/* =====================  MOVEMENT LOOP  ===================== */
+function collides(nx,ny){
+  return PLACES.some(p=> nx>p.x-14 && nx<p.x+p.w+14 && ny>p.y-14 && ny<p.y+p.h+14 &&
+    !(nx>p.x-22&&false));
+}
+function step(){
+  if(player && !busy){
+    let dx=0,dy=0;
+    if(keys.left)dx-=1; if(keys.right)dx+=1; if(keys.up)dy-=1; if(keys.down)dy+=1;
+    if(dx||dy){
+      const sp=player.speed*1.9, len=Math.hypot(dx,dy);
+      let nx=px+dx/len*sp, ny=py+dy/len*sp;
+      nx=Math.max(20,Math.min(W-20,nx)); ny=Math.max(20,Math.min(H-20,ny));
+      if(!insideBuilding(nx,py)) px=nx;
+      if(!insideBuilding(px,ny)) py=ny;
+      if(dx<0)owFace=-1; else if(dx>0)owFace=1;
+      owMoving=true; owWalk+=0.28;
+    } else { owMoving=false; }
+    /* proximity */
+    nearPlace=null;
+    for(const p of PLACES){
+      const cx=Math.max(p.x,Math.min(px,p.x+p.w)), cy=Math.max(p.y,Math.min(py,p.y+p.h));
+      if(Math.hypot(px-cx,py-cy)<46){ nearPlace=p; break; }
+    }
+    updatePrompt();
+    /* delivery dash check */
+    if(dashTarget){
+      const p=dashTarget;
+      const cx=Math.max(p.x,Math.min(px,p.x+p.w)), cy=Math.max(p.y,Math.min(py,p.y+p.h));
+      if(Math.hypot(px-cx,py-cy)<50){ finishDash(true); }
+      else if(Date.now()>dashDeadline){ finishDash(false); }
+      else {
+        const left=Math.ceil((dashDeadline-Date.now())/1000);
+        toast(`🚩 Deliver to ${p.name}! ${left}s left`,400);
+      }
+    }
+  }
+  drawMap();
+  requestAnimationFrame(step);
+}
+function insideBuilding(nx,ny){
+  return PLACES.some(p=> nx>p.x-16 && nx<p.x+p.w+16 && ny>p.y-16 && ny<p.y+p.h+16);
+}
+requestAnimationFrame(step);
+
+function updatePrompt(){
+  const el=$('prompt'), eb=$('enterBtn');
+  if(!nearPlace || busy || dashTarget){ el.style.display='none'; eb.style.display='none'; return; }
+  const p=nearPlace, t=TASKS[p.task];
+  const usable=canDo(player,p);
+  let html=`<span class="pixel">${p.name}</span><br>`;
+  if(p.id==='home' && cash>=RENT){
+    html+= landlordDown
+      ? `🟫 The basement groans... Press E to <b>FACE 78 CUP</b>`
+      : `⚔️ You have rent money... but the OPR LANDLORD blocks the porch. Press E to <b>FACE HIM</b>`;
+  } else if(usable){
+    html+=`${t.title} — pays ~$${currentPay(p)} · Press E to start`;
+  } else {
+    html+=`🔒 Needs ${POWER_NAMES[p.req]} — ${player.name} can't do this one`;
+  }
+  el.innerHTML=html; el.style.display='block';
+  eb.style.display = (usable || (p.id==='home' && cash>=RENT)) ? 'block':'none';
+}
+
+/* payout with repeat decay + specialist bonus */
+function currentPay(p){
+  const base=TASKS[p.task].pay;
+  const n=payCount[p.task]||0;
+  let v=base*Math.pow(.85,n);
+  if(p.req && !player.powers.includes('all') && player.powers.includes(p.req)) v*=1.5;
+  return Math.max(Math.round(base*.4), Math.round(v));
+}
+function award(p,bonus=0){
+  const amt=currentPay(p)+bonus;
+  payCount[p.task]=(payCount[p.task]||0)+1;
+  cash+=amt; updateHUD();
+  toast(`✅ ${TASKS[p.task].title} complete! +$${amt}${bonus?` (incl. $${bonus} bonus)`:''}`,3500);
+  if(cash>=RENT) toast(`💰 You've got rent money! Head to 932 Ackerman and press E to pay.`,5000);
+}
+
+/* =====================  INPUT  ===================== */
+const KEYMAP={ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down',
+  a:'left',d:'right',w:'up',s:'down',A:'left',D:'right',W:'up',S:'down'};
+window.addEventListener('keydown',e=>{
+  if(KEYMAP[e.key]){keys[KEYMAP[e.key]]=true; e.preventDefault();}
+  if((e.key==='e'||e.key==='E'||e.key==='Enter') && !busy) tryEnter();
+});
+window.addEventListener('keyup',e=>{ if(KEYMAP[e.key])keys[KEYMAP[e.key]]=false; });
+document.querySelectorAll('#pad button').forEach(b=>{
+  const d=b.dataset.d;
+  const on=e=>{e.preventDefault();keys[d]=true;}, off=e=>{e.preventDefault();keys[d]=false;};
+  b.addEventListener('pointerdown',on); b.addEventListener('pointerup',off);
+  b.addEventListener('pointerleave',off); b.addEventListener('pointercancel',off);
+});
+$('enterBtn').onclick=()=>tryEnter();
+
+function tryEnter(){
+  if(!nearPlace||busy||dashTarget) return;
+  const p=nearPlace;
+  if(p.id==='home' && cash>=RENT){ payRent(); return; }
+  if(!canDo(player,p)){ toast(`🔒 ${POWER_NAMES[p.req]} required. Find a housemate gig instead.`); return; }
+  launchTask(p);
+}
+let landlordDown=false;
+function payRent(){ landlordDown ? start78Intro() : startBossIntro(); }
+
+/* =====================  FINAL BOSS: THE OPR LANDLORD  ===================== */
+function startBossIntro(){
+  openModal('⚔️ FINAL BOSS: THE OPR LANDLORD',
+    `<p>🧑‍💼 The OPR Landlord steps onto the porch of 932, clipboard in hand.</p>
+     <p style="margin-top:8px">"Rent's $1,000... <b>plus a $400 amenity fee</b> I invented on the drive over.
+     The amenity is me, being here."</p>
+     <p style="margin-top:8px">Defeat him to make him honor the lease! Move with ◀ ▶ (A/D), throw oranges with
+     <b>SPACE</b> (or the THROW button). Dodge his <b>LATE FEE</b> papers and flying keys — 3 hits and you're evicted
+     to the lawn (lose $100 and retry).</p>
+     <p style="margin-top:8px;font-size:12px;color:#9fb0d6">Power perks: 💪 strength = double orange damage ·
+     🛹/🥸 speed = faster footwork · 🍊 Scott = +1 heart</p>
+     <button class="mgBtn" id="bossGo">FIGHT</button>
+     <button class="mgBtn alt" id="bossNo">RETREAT</button>`);
+  $('bossNo').onclick=closeModal;
+  $('bossGo').onclick=bossFight;
+}
+
+function bossFight(){
+  const fast=player.powers.includes('speed');
+  const strong=player.powers.includes('strength');
+  const dmg= strong?2:1;
+  let bossHP=20, hearts= player.id==='scott'?4:3;
+  let x=250, dir=0, shots=[], hazards=[], lastShot=0, over=false;
+  let bx=250, bdir=1, phase=1, t0=Date.now();
+
+  mBody.innerHTML=`<p>🧑‍💼 <b>OPR LANDLORD</b> — HP: <span id="bHP">20</span></p>
+    <div class="barOuter" style="height:14px"><div class="barFill" id="bBar" style="width:100%;background:var(--bad)"></div></div>
+    <canvas id="dodge" width="500" height="360"></canvas>
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <button class="mgBtn" id="bL" style="flex:1">◀</button>
+      <button class="mgBtn" id="bT" style="flex:2">🍊 THROW</button>
+      <button class="mgBtn" id="bR" style="flex:1">▶</button>
+    </div>`;
+  mTitle.textContent='⚔️ FINAL BOSS: THE OPR LANDLORD';
+
+  const dc=$('dodge'), g=dc.getContext('2d');
+  const SPD= fast?7.5:5;
+  function shoot(){
+    if(over) return;
+    const now=Date.now();
+    if(now-lastShot<380) return;
+    lastShot=now; shots.push({x:x,y:300});
+  }
+  const keyH=e=>{
+    if(e.key==='ArrowLeft'||e.key==='a')dir=-1;
+    if(e.key==='ArrowRight'||e.key==='d')dir=1;
+    if(e.code==='Space'){e.preventDefault();shoot();}
+  };
+  const upH=e=>{ if(['ArrowLeft','a','ArrowRight','d'].includes(e.key))dir=0; };
+  window.addEventListener('keydown',keyH); window.addEventListener('keyup',upH);
+  const hold=(el,d)=>{ el.addEventListener('pointerdown',e=>{e.preventDefault();dir=d;});
+    ['pointerup','pointerleave','pointercancel'].forEach(ev=>el.addEventListener(ev,()=>dir=0)); };
+  hold($('bL'),-1); hold($('bR'),1);
+  $('bT').addEventListener('pointerdown',e=>{e.preventDefault();shoot();});
+
+  const taunts=['LATE FEE','"WEAR & TEAR"','NO SUBLETS','AMENITY FEE','SECURITY DEPOSIT? GONE'];
+  let taunt='', tauntT=0;
+
+  const iv=setInterval(()=>{
+    if(over)return;
+    phase = bossHP<=7?3 : bossHP<=14?2 : 1;
+    /* boss movement */
+    const bspd = 2+phase*1.2;
+    bx+=bdir*bspd; if(bx>460||bx<40)bdir*=-1;
+    if(Math.random()<.01)bdir*=-1;
+    /* boss attacks */
+    const dropRate=.035+phase*.022;
+    if(Math.random()<dropRate){
+      const aimed = Math.random()<.4;
+      hazards.push({x: aimed? x+(Math.random()*60-30) : bx, y:60,
+        v:2.2+phase*.9+Math.random()*1.5, kind: Math.random()<.3?'key':'fee'});
+    }
+    /* player */
+    x=Math.max(18,Math.min(482,x+dir*SPD));
+    /* shots */
+    shots.forEach(s=>s.y-=8);
+    shots=shots.filter(s=>{
+      if(s.y<30)return false;
+      if(Math.abs(s.x-bx)<30 && Math.abs(s.y-55)<30){
+        bossHP-=dmg; $('bHP').textContent=Math.max(0,bossHP);
+        $('bBar').style.width=Math.max(0,bossHP/20*100)+'%';
+        taunt=taunts[Math.floor(Math.random()*taunts.length)]; tauntT=Date.now();
+        return false;
+      } return true;
+    });
+    /* hazards */
+    hazards.forEach(h=>h.y+=h.v);
+    hazards=hazards.filter(h=>{
+      if(h.y>370)return false;
+      if(Math.abs(h.x-x)<24 && Math.abs(h.y-300)<24){ hearts--; return false; }
+      return true;
+    });
+    /* draw */
+    g.fillStyle='#101A33'; g.fillRect(0,0,500,360);
+    /* porch */
+    g.fillStyle='#8C4A3C'; g.fillRect(0,346,500,14);
+    g.fillStyle='#F76900'; g.fillRect(0,0,500,8);
+    g.font='40px serif'; g.fillText(phase===3?'😡':'🧑‍💼',bx-20,70);
+    g.font='18px serif'; g.fillText('📋',bx+18,50);
+    if(Date.now()-tauntT<900){ g.font='11px "Press Start 2P"'; g.fillStyle='#E2504C';
+      g.fillText(taunt, Math.min(330,Math.max(10,bx-60)), 95); }
+    g.font='24px serif';
+    shots.forEach(s=>g.fillText('🍊',s.x-12,s.y));
+    hazards.forEach(h=>{
+      if(h.kind==='key'){ g.fillText('🔑',h.x-12,h.y); }
+      else { g.fillStyle='#F2E9D8'; g.fillRect(h.x-22,h.y-14,44,18);
+        g.fillStyle='#E2504C'; g.font='9px "Press Start 2P"'; g.fillText('FEE',h.x-13,h.y-1); g.font='24px serif'; }
+    });
+    drawSprite(g, player.look, x, 332, 2.0, 0, 1);
+    g.font='14px "IBM Plex Mono"'; g.fillStyle='#F2E9D8';
+    g.fillText('❤'.repeat(Math.max(0,hearts))+`  PHASE ${phase}`,10,24);
+    /* outcomes */
+    if(bossHP<=0){ over=true; clearInterval(iv); bossWin(); }
+    else if(hearts<=0){ over=true; clearInterval(iv); bossLose(); }
+  },30);
+  cleanupFn=()=>{ clearInterval(iv); window.removeEventListener('keydown',keyH); window.removeEventListener('keyup',upH); };
+}
+
+function bossWin(){
+  if(cleanupFn){cleanupFn(); cleanupFn=null;}
+  landlordDown=true;
+  mBody.innerHTML=`<p class="big">K.O.!</p>
+    <p style="margin-top:10px">🧑‍💼 The Landlord, covered in orange pulp, mutters "...fine, just the $1,000"
+    and reaches for the rent check...</p>
+    <button class="mgBtn" id="bossDone">PAY RENT & WIN</button>`;
+  $('bossDone').onclick=reveal78;
+}
+
+/* =====================  SECRET BOSS: 78 CUP  ===================== */
+function reveal78(){
+  mTitle.textContent='⚠️ WAIT.';
+  mBody.innerHTML=`<p>The porch begins to <b>shake</b>. Empty cans rattle. A low groan of plywood
+    echoes from the basement of 932...</p>
+    <p style="margin-top:10px;text-align:center;font-size:46px;">🟫👁️👁️🟫</p>
+    <p style="margin-top:10px;text-align:center;" class="big">78 CUP HAS AWAKENED</p>
+    <p style="margin-top:10px">The house's ancient beer pong table — undefeated since 2017, soaked in the
+    spills of a thousand parties — crashes through the porch railing. It does not want rent.
+    It wants <b>one last game.</b></p>
+    <p style="margin-top:8px;font-size:12px;color:#9fb0d6">⚠️ 78 Cup is far deadlier than the Landlord:
+    78 HP, bouncing pong balls, spread volleys, and a phase-3 CUP STORM. This fight is <b>first-person 3D</b> —
+    drag/move your mouse to aim, WASD or arrows to dodge, click or SPACE to throw pong balls back.
+    Your shots do 3 damage (💪 strength: 6). Good luck.</p>
+    <button class="mgBtn" id="b78Go">SEND IT</button>
+    <button class="mgBtn alt" id="b78No">FLEE (rematch at 932 anytime)</button>`;
+  $('b78No').onclick=closeModal;
+  $('b78Go').onclick=fight78;
+}
+function start78Intro(){
+  openModal('⚠️ SECRET BOSS: 78 CUP','');
+  reveal78();
+}
+
+function has3D(){
+  try{ return typeof THREE!=='undefined' && !!document.createElement('canvas').getContext('webgl'); }
+  catch(e){ return false; }
+}
+function fight78(){ if(has3D()) fight78_3D(); else fight78_2D(); }
+
+function fight78_2D(){
+  const fast=player.powers.includes('speed');
+  const strong=player.powers.includes('strength');
+  const dmg= strong?6:3;
+  const MAXHP=78;
+  let hp=MAXHP, hearts= player.id==='scott'?4:3;
+  let x=250, dir=0, shots=[], balls=[], lastShot=0, over=false;
+  let bx=250, bdir=1, t0=Date.now(), slamT=0;
+
+  mTitle.textContent='🟫 78 CUP — THE FINAL GAME';
+  mBody.innerHTML=`<p>🟫 <b>78 CUP</b> — HP: <span id="cHP">${MAXHP}</span></p>
+    <div class="barOuter" style="height:14px"><div class="barFill" id="cBar" style="width:100%;background:#c0392b"></div></div>
+    <canvas id="dodge" width="500" height="380"></canvas>
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <button class="mgBtn" id="cL" style="flex:1">◀</button>
+      <button class="mgBtn" id="cT" style="flex:2">⚪ THROW</button>
+      <button class="mgBtn" id="cR" style="flex:1">▶</button>
+    </div>`;
+  const dc=$('dodge'), g=dc.getContext('2d');
+  const SPD= fast?8:5.2;
+  function shoot(){
+    if(over)return;
+    const now=Date.now();
+    if(now-lastShot<300)return;
+    lastShot=now; shots.push({x:x,y:316});
+  }
+  const keyH=e=>{
+    if(e.key==='ArrowLeft'||e.key==='a')dir=-1;
+    if(e.key==='ArrowRight'||e.key==='d')dir=1;
+    if(e.code==='Space'){e.preventDefault();shoot();}
+  };
+  const upH=e=>{ if(['ArrowLeft','a','ArrowRight','d'].includes(e.key))dir=0; };
+  window.addEventListener('keydown',keyH); window.addEventListener('keyup',upH);
+  const hold=(el,d)=>{ el.addEventListener('pointerdown',e=>{e.preventDefault();dir=d;});
+    ['pointerup','pointerleave','pointercancel'].forEach(ev=>el.addEventListener(ev,()=>dir=0)); };
+  hold($('cL'),-1); hold($('cR'),1);
+  $('cT').addEventListener('pointerdown',e=>{e.preventDefault();shoot();});
+
+  function phase(){ return hp<=26?3 : hp<=52?2 : 1; }
+
+  const iv=setInterval(()=>{
+    if(over)return;
+    const ph=phase();
+    /* table movement: faster than landlord, jukes */
+    const bspd = 3+ph*1.5;
+    bx+=bdir*bspd; if(bx>430||bx<70)bdir*=-1;
+    if(Math.random()<.02)bdir*=-1;
+    /* attacks */
+    const rate=.05+ph*.03;
+    if(Math.random()<rate){
+      const roll=Math.random();
+      if(roll<.35){ // aimed shot
+        balls.push({x:bx,y:95,vx:(x-bx)/110,vy:3.4+ph*.9,b:false});
+      } else if(roll<.65){ // bouncer
+        balls.push({x:bx,y:95,vx:(Math.random()<.5?-1:1)*(2+ph),vy:2.6+ph*.7,b:true});
+      } else { // straight drop
+        balls.push({x:bx+(Math.random()*120-60),y:95,vx:0,vy:3+ph,b:false});
+      }
+    }
+    /* phase 2+: occasional triple spread */
+    if(ph>=2 && Math.random()<.012){
+      [-2.4,0,2.4].forEach(vx=>balls.push({x:bx,y:95,vx:vx,vy:3.6,b:false}));
+    }
+    /* phase 3: CUP STORM every ~4s */
+    if(ph===3 && Date.now()-slamT>4000){
+      slamT=Date.now();
+      for(let i=0;i<7;i++) balls.push({x:40+i*70,y:60,vx:0,vy:4.6,b:false,cup:true});
+    }
+    /* player + shots */
+    x=Math.max(18,Math.min(482,x+dir*SPD));
+    shots.forEach(s=>s.y-=9);
+    shots=shots.filter(s=>{
+      if(s.y<40)return false;
+      if(Math.abs(s.x-bx)<58 && Math.abs(s.y-78)<34){
+        hp-=dmg; $('cHP').textContent=Math.max(0,hp);
+        $('cBar').style.width=Math.max(0,hp/MAXHP*100)+'%';
+        return false;
+      } return true;
+    });
+    /* hazard balls */
+    balls.forEach(b=>{ b.x+=b.vx; b.y+=b.vy;
+      if(b.b && (b.x<12||b.x>488)) b.vx*=-1;
+    });
+    balls=balls.filter(b=>{
+      if(b.y>390)return false;
+      if(Math.abs(b.x-x)<22 && Math.abs(b.y-318)<22){ hearts--; return false; }
+      return true;
+    });
+    /* ---- draw ---- */
+    g.fillStyle='#0c0816'; g.fillRect(0,0,500,380);
+    /* basement party haze */
+    g.fillStyle='#1c1130'; g.fillRect(0,330,500,50);
+    /* THE TABLE */
+    g.fillStyle='#6b4423'; g.fillRect(bx-70,55,140,40);              // tabletop
+    g.fillStyle='#4a2f17'; g.fillRect(bx-62,95,10,18); g.fillRect(bx+52,95,10,18); // legs
+    /* solo cups on top */
+    g.fillStyle='#c0392b';
+    for(let i=0;i<5;i++){ g.fillRect(bx-58+i*26,44,16,12); }
+    g.fillStyle='#fff'; for(let i=0;i<5;i++){ g.fillRect(bx-58+i*26,44,16,3); }
+    /* MENACING EYES */
+    const ph3=phase()===3;
+    g.fillStyle= ph3?'#ff1a1a':'#E2504C';
+    g.beginPath(); g.ellipse(bx-25,75,11,7,0,0,7); g.fill();
+    g.beginPath(); g.ellipse(bx+25,75,11,7,0,0,7); g.fill();
+    g.fillStyle='#000';
+    g.beginPath(); g.arc(bx-25+(x>bx?3:-3),75,3.5,0,7); g.fill();
+    g.beginPath(); g.arc(bx+25+(x>bx?3:-3),75,3.5,0,7); g.fill();
+    /* angry brows */
+    g.strokeStyle=ph3?'#ff1a1a':'#E2504C'; g.lineWidth=3;
+    g.beginPath(); g.moveTo(bx-38,64); g.lineTo(bx-14,70); g.stroke();
+    g.beginPath(); g.moveTo(bx+38,64); g.lineTo(bx+14,70); g.stroke();
+    if(ph3){ g.font='10px "Press Start 2P"'; g.fillStyle='#ff1a1a';
+      g.fillText('CUP STORM', bx-48, 32); }
+    /* projectiles */
+    balls.forEach(b=>{
+      if(b.cup){ g.font='20px serif'; g.fillText('🥤',b.x-10,b.y); }
+      else { g.fillStyle='#fff'; g.beginPath(); g.arc(b.x,b.y,7,0,7); g.fill();
+        g.strokeStyle='#aaa'; g.lineWidth=1; g.stroke(); }
+    });
+    g.fillStyle='#fff';
+    shots.forEach(s=>{ g.beginPath(); g.arc(s.x,s.y,6,0,7); g.fill(); });
+    /* player */
+    drawSprite(g, player.look, x, 350, 2.0, 0, 1);
+    g.font='14px "IBM Plex Mono"'; g.fillStyle='#F2E9D8';
+    g.fillText('❤'.repeat(Math.max(0,hearts))+`  PHASE ${phase()}`,10,24);
+    /* outcomes */
+    if(hp<=0){ over=true; clearInterval(iv); win78(); }
+    else if(hearts<=0){ over=true; clearInterval(iv); lose78(); }
+  },30);
+  cleanupFn=()=>{ clearInterval(iv); window.removeEventListener('keydown',keyH); window.removeEventListener('keyup',upH); };
+}
+
+/* ---- 3D FIRST-PERSON 78 CUP ---- */
+function fight78_3D(){
+  busy=true; keys={};
+  const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints>0;
+  const strong=player.powers.includes('strength');
+  const fast=player.powers.includes('speed');
+  const dmg = strong?6:3;
+  const MAXHP=78;
+  let hp=MAXHP, hearts= player.id==='scott'?4:3;
+  let running=true, raf=0, slamT=0, foeTimer=0, lastFire=0;
+
+  /* ---- overlay UI ---- */
+  const ov=document.createElement('div'); ov.id='arena';
+  ov.innerHTML=`
+    <canvas id="arenaCanvas"></canvas>
+    <div id="arenaTop">
+      <div id="arenaHp"><span id="arenaHpLabel">78 CUP — HP ${MAXHP}</span>
+        <div class="abar"><div id="arenaHpFill"></div></div></div>
+      <div id="arenaHearts"></div>
+      <div id="arenaPhase">PHASE 1</div>
+    </div>
+    <div id="crosshair">+</div>
+    <div id="arenaHurt"></div>
+    <button id="arenaFlee">FLEE</button>
+    <div id="arenaHint">${isTouch?'DRAG TO AIM · PAD TO DODGE · TAP THROW':'DRAG/MOVE MOUSE TO AIM · WASD/ARROWS TO DODGE · CLICK OR SPACE TO THROW'}</div>
+    ${isTouch?`<div id="arenaPad">
+        <button class="apad f" data-mv="f">▲</button>
+        <button class="apad l" data-mv="l">◀</button>
+        <button class="apad b" data-mv="b">▼</button>
+        <button class="apad r" data-mv="r">▶</button>
+      </div><button id="arenaFire">⚪ THROW</button>`:''}`;
+  document.body.appendChild(ov);
+  const heartsEl=ov.querySelector('#arenaHearts');
+  const drawHearts=()=>{ heartsEl.textContent='❤'.repeat(Math.max(0,hearts)); };
+  const setHp=()=>{ ov.querySelector('#arenaHpFill').style.width=Math.max(0,hp/MAXHP*100)+'%';
+    ov.querySelector('#arenaHpLabel').textContent=`78 CUP — HP ${Math.max(0,hp)}`; };
+  drawHearts(); setHp();
+
+  /* ---- three.js scene ---- */
+  const canvas=ov.querySelector('#arenaCanvas');
+  const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+  renderer.setPixelRatio(Math.min(2,window.devicePixelRatio||1));
+  const scene=new THREE.Scene();
+  scene.background=new THREE.Color(0x0a0614);
+  scene.fog=new THREE.Fog(0x0a0614,12,34);
+  const camera=new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 100);
+  camera.rotation.order='YXZ'; camera.position.set(0,1.6,8);
+  let yaw=0, pitch=0;
+  function size(){ renderer.setSize(window.innerWidth,window.innerHeight);
+    camera.aspect=window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); }
+
+  /* lights */
+  scene.add(new THREE.AmbientLight(0x404060,1.1));
+  const spot=new THREE.SpotLight(0xfff0e0,1.3,42,0.7,0.5);
+  spot.position.set(0,8,-3); spot.target.position.set(0,1,-11); scene.add(spot); scene.add(spot.target);
+  const pl1=new THREE.PointLight(0x9b59b6,0.9,32); pl1.position.set(-8,5,3); scene.add(pl1);
+  const pl2=new THREE.PointLight(0x2e6fd9,0.9,32); pl2.position.set(8,5,3); scene.add(pl2);
+
+  /* room */
+  const woodMat=new THREE.MeshStandardMaterial({color:0x3a2a1a,roughness:.95});
+  const floor=new THREE.Mesh(new THREE.PlaneGeometry(44,54),woodMat);
+  floor.rotation.x=-Math.PI/2; scene.add(floor);
+  const room=new THREE.Mesh(new THREE.BoxGeometry(44,22,54),
+    new THREE.MeshStandardMaterial({color:0x161024,roughness:1,side:THREE.BackSide}));
+  room.position.set(0,11,-5); scene.add(room);
+  const disco=new THREE.Mesh(new THREE.SphereGeometry(0.7,12,12),
+    new THREE.MeshStandardMaterial({color:0xcccccc,metalness:1,roughness:.2,emissive:0x222244}));
+  disco.position.set(0,7.5,-4); scene.add(disco);
+
+  /* ---- the table boss ---- */
+  const boss=new THREE.Group(); boss.position.set(0,0,-11); scene.add(boss);
+  const topMat=new THREE.MeshStandardMaterial({color:0x6b4423,roughness:.7});
+  const tabletop=new THREE.Mesh(new THREE.BoxGeometry(6,0.35,2.4),topMat); tabletop.position.y=1.5; boss.add(tabletop);
+  const legGeo=new THREE.BoxGeometry(0.3,1.5,0.3);
+  [[-2.7,-1],[2.7,-1],[-2.7,1],[2.7,1]].forEach(([lx,lz])=>{
+    const leg=new THREE.Mesh(legGeo,topMat); leg.position.set(lx,0.75,lz); boss.add(leg); });
+  const cupMat=new THREE.MeshStandardMaterial({color:0xc0392b,roughness:.5});
+  for(let i=0;i<5;i++){ const cup=new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.16,0.5,12),cupMat);
+    cup.position.set(-2.2+i*1.1,1.95,0); boss.add(cup); }
+  const eyeMat=new THREE.MeshStandardMaterial({color:0xff3333,emissive:0xaa0000,emissiveIntensity:1.2});
+  const eyeL=new THREE.Mesh(new THREE.SphereGeometry(0.45,16,16),eyeMat); eyeL.position.set(-1.3,1.6,1.25); boss.add(eyeL);
+  const eyeR=new THREE.Mesh(new THREE.SphereGeometry(0.45,16,16),eyeMat); eyeR.position.set(1.3,1.6,1.25); boss.add(eyeR);
+  const pupMat=new THREE.MeshStandardMaterial({color:0x110000});
+  const pupL=new THREE.Mesh(new THREE.SphereGeometry(0.2,12,12),pupMat); eyeL.add(pupL); pupL.position.z=0.32;
+  const pupR=new THREE.Mesh(new THREE.SphereGeometry(0.2,12,12),pupMat); eyeR.add(pupR); pupR.position.z=0.32;
+  const browMat=new THREE.MeshStandardMaterial({color:0x3a1a0a});
+  const browL=new THREE.Mesh(new THREE.BoxGeometry(1.1,0.18,0.18),browMat); browL.position.set(-1.3,2.05,1.35); browL.rotation.z=-0.4; boss.add(browL);
+  const browR=new THREE.Mesh(new THREE.BoxGeometry(1.1,0.18,0.18),browMat); browR.position.set(1.3,2.05,1.35); browR.rotation.z=0.4; boss.add(browR);
+
+  /* ---- projectiles ---- */
+  const myBalls=[], foeBalls=[];
+  const myGeo=new THREE.SphereGeometry(0.13,10,10);
+  const myMat=new THREE.MeshStandardMaterial({color:0xffffff,emissive:0x888888});
+  const foeGeo=new THREE.SphereGeometry(0.16,10,10);
+  const foeMat=new THREE.MeshStandardMaterial({color:0xffaa33,emissive:0xff7a00,emissiveIntensity:1.5});
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  function fire(){
+    if(!running) return;
+    const now=performance.now(); if(now-lastFire<260) return; lastFire=now;
+    const dir=new THREE.Vector3(-Math.sin(yaw)*Math.cos(pitch),Math.sin(pitch),-Math.cos(yaw)*Math.cos(pitch)).normalize();
+    const b=new THREE.Mesh(myGeo,myMat);
+    b.position.copy(camera.position).addScaledVector(dir,0.6);
+    b.userData.vel=dir.multiplyScalar(34); scene.add(b); myBalls.push(b);
+  }
+  function cupWorld(i){ const v=new THREE.Vector3(-2.2+i*1.1,1.95,0); boss.localToWorld(v); return v; }
+  function spawnFoe(o,d,sp){ const b=new THREE.Mesh(foeGeo,foeMat);
+    b.position.copy(o); b.userData.vel=d.clone().normalize().multiplyScalar(sp); scene.add(b); foeBalls.push(b); }
+  function aimAtPlayer(spread){ const o=cupWorld(Math.floor(Math.random()*5));
+    const d=new THREE.Vector3().subVectors(camera.position,o);
+    if(spread){ d.x+=(Math.random()-0.5)*spread; d.y+=(Math.random()-0.5)*spread*0.5; } return {o,d}; }
+
+  /* ---- input (unified pointer: drag=aim, tap=throw) ---- */
+  const km={ArrowLeft:'l',a:'l',A:'l',ArrowRight:'r',d:'r',D:'r',ArrowUp:'f',w:'f',W:'f',ArrowDown:'b',s:'b',S:'b'};
+  const mv={l:0,r:0,f:0,b:0};
+  const onKeyDown=e=>{ if(km[e.key]!==undefined){mv[km[e.key]]=1; e.preventDefault();}
+    if(e.code==='Space'){e.preventDefault(); fire();} };
+  const onKeyUp=e=>{ if(km[e.key]!==undefined)mv[km[e.key]]=0; };
+  window.addEventListener('keydown',onKeyDown); window.addEventListener('keyup',onKeyUp);
+  let dragging=false, didDrag=false, lastP=null;
+  const pDown=e=>{ dragging=true; didDrag=false; lastP={x:e.clientX,y:e.clientY}; };
+  const pMove=e=>{ if(!dragging)return; const dx=e.clientX-lastP.x, dy=e.clientY-lastP.y;
+    if(Math.abs(dx)+Math.abs(dy)>3)didDrag=true;
+    yaw-=dx*0.005; pitch=clamp(pitch-dy*0.005,-1.1,1.1); lastP={x:e.clientX,y:e.clientY}; e.preventDefault(); };
+  const pUp=e=>{ if(dragging && !didDrag) fire(); dragging=false; };
+  canvas.addEventListener('pointerdown',pDown);
+  canvas.addEventListener('pointermove',pMove,{passive:false});
+  canvas.addEventListener('pointerup',pUp);
+  canvas.addEventListener('pointercancel',()=>dragging=false);
+  if(isTouch){
+    ov.querySelectorAll('.apad').forEach(b=>{ const d=b.dataset.mv;
+      const on=e=>{e.preventDefault();mv[d]=1;}, off=e=>{e.preventDefault();mv[d]=0;};
+      b.addEventListener('pointerdown',on); ['pointerup','pointerleave','pointercancel'].forEach(ev=>b.addEventListener(ev,off)); });
+    ov.querySelector('#arenaFire').addEventListener('pointerdown',e=>{e.preventDefault();fire();});
+  }
+  ov.querySelector('#arenaFlee').addEventListener('click',()=>{ teardown(); busy=false;
+    toast('You backed out of the basement. Return to 932 anytime to face 78 Cup.',4000); });
+  window.addEventListener('resize',size); size();
+
+  /* ---- loop ---- */
+  const clock=new THREE.Clock();
+  const phase=()=> hp<=26?3 : hp<=52?2 : 1;
+  const hurt=()=>{ const h=ov.querySelector('#arenaHurt'); h.style.opacity=1; setTimeout(()=>h.style.opacity=0,140); };
+  function update(dt){
+    const ph=phase();
+    ov.querySelector('#arenaPhase').textContent='PHASE '+ph+(ph===3?' · CUP STORM':'');
+    camera.rotation.y=yaw; camera.rotation.x=pitch;
+    /* movement (dodge) */
+    const sp=fast?6.8:5.0;
+    const fwd=new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw));
+    const right=new THREE.Vector3(Math.cos(yaw),0,-Math.sin(yaw));
+    const move=new THREE.Vector3().addScaledVector(fwd,mv.f-mv.b).addScaledVector(right,mv.r-mv.l);
+    if(move.lengthSq()>0){ move.normalize().multiplyScalar(sp*dt); camera.position.add(move); }
+    camera.position.x=clamp(camera.position.x,-6,6);
+    camera.position.z=clamp(camera.position.z,3.5,9.5);
+    camera.position.y=1.6;
+    /* boss sway + eye tracking */
+    const t=performance.now()/1000;
+    boss.position.x=Math.sin(t*(0.8+ph*0.5))*(1.2+ph*0.6);
+    boss.rotation.y=Math.sin(t*0.6)*0.15;
+    boss.updateMatrixWorld(true);
+    eyeMat.emissiveIntensity=ph===3?2.6:1.2;
+    const look=new THREE.Vector3().subVectors(camera.position,boss.position).normalize();
+    pupL.position.set(look.x*0.18,look.y*0.1,0.3); pupR.position.copy(pupL.position);
+    disco.rotation.y+=dt*1.5;
+    /* my balls */
+    for(let i=myBalls.length-1;i>=0;i--){ const b=myBalls[i];
+      b.position.addScaledVector(b.userData.vel,dt);
+      const lp=boss.worldToLocal(b.position.clone());
+      if(Math.abs(lp.x)<3.2 && lp.y>0.4 && lp.y<2.4 && Math.abs(lp.z)<1.5){
+        hp-=dmg; setHp(); scene.remove(b); myBalls.splice(i,1);
+        if(hp<=0){ endWin(); return; } continue; }
+      if(b.position.z<-16||Math.abs(b.position.x)>15||b.position.y<0||b.position.y>9){ scene.remove(b); myBalls.splice(i,1); }
+    }
+    /* boss fire */
+    foeTimer-=dt;
+    const rate= ph===3?0.5 : ph===2?0.7 : 0.95;
+    if(foeTimer<=0){ foeTimer=rate; const sp2=9+ph*2.2;
+      if(ph>=2 && Math.random()<0.4){ for(let k=-1;k<=1;k++){ const {o,d}=aimAtPlayer(0); d.x+=k*2.2; spawnFoe(o,d,sp2); } }
+      else { const {o,d}=aimAtPlayer(ph>=2?1.5:0.8); spawnFoe(o,d,sp2); } }
+    if(ph===3 && performance.now()-slamT>3500){ slamT=performance.now();
+      for(let i=0;i<5;i++){ const o=cupWorld(i); const d=new THREE.Vector3().subVectors(camera.position,o); d.x+=(i-2)*1.3; spawnFoe(o,d,11); } }
+    /* foe balls */
+    for(let i=foeBalls.length-1;i>=0;i--){ const b=foeBalls[i];
+      b.position.addScaledVector(b.userData.vel,dt);
+      if(b.position.distanceTo(camera.position)<0.7){ scene.remove(b); foeBalls.splice(i,1); hearts--; drawHearts(); hurt();
+        if(hearts<=0){ endLose(); return; } continue; }
+      if(b.position.z>14||b.position.y<-1||Math.abs(b.position.x)>16){ scene.remove(b); foeBalls.splice(i,1); }
+    }
+  }
+  function loop(){ if(!running)return; raf=requestAnimationFrame(loop);
+    const dt=Math.min(0.05,clock.getDelta()); update(dt); renderer.render(scene,camera); }
+  function teardown(){ running=false; cancelAnimationFrame(raf);
+    window.removeEventListener('keydown',onKeyDown); window.removeEventListener('keyup',onKeyUp);
+    window.removeEventListener('resize',size);
+    try{ renderer.dispose(); }catch(e){} ov.remove(); }
+  function endWin(){ teardown(); win78(); }
+  function endLose(){ teardown(); lose78(); }
+  loop();
+}
+
+function win78(){
+  if(cleanupFn){cleanupFn(); cleanupFn=null;}
+  if(!modal.classList.contains('active')) openModal('🟫 78 CUP — THE FINAL GAME','');
+  mBody.innerHTML=`<p class="big">78 CUP IS SUNK</p>
+    <p style="margin-top:10px;text-align:center;font-size:40px;">🟫💥⚪</p>
+    <p style="margin-top:10px">The final ball drops. 78 Cup's eyes flicker out, and it folds itself flat
+    against the basement wall — at peace at last. The Landlord, hiding behind the recycling bins,
+    silently accepts your $1,000.</p>
+    <button class="mgBtn" id="b78Done">CLAIM VICTORY</button>`;
+  $('b78Done').onclick=()=>{
+    closeModal();
+    cash-=RENT;
+    /* Secret unlock: beat 78 Cup as Rex → Rachael joins the roster (this session) */
+    const justUnlocked = (player.id==='rex' && !rachaelUnlocked);
+    if(justUnlocked){ rachaelUnlocked=true; renderChars(); }
+    $('unlockBanner').style.display = justUnlocked ? 'block' : 'none';
+    $('winText').textContent=`${player.face} ${player.name} defeated the OPR Landlord AND sank the legendary `+
+      `78 Cup in single combat. Rent: paid. Table: retired with honors. `+
+      `The boys of 932 Ackerman are immortal. Leftover cash: $${cash}.`;
+    show('winScreen');
+  };
+}
+function lose78(){
+  if(cleanupFn){cleanupFn(); cleanupFn=null;}
+  if(!modal.classList.contains('active')) openModal('🟫 78 CUP — THE FINAL GAME','');
+  const fine=Math.min(150,cash);
+  cash-=fine; updateHUD();
+  mBody.innerHTML=`<p class="big">TABLED.</p>
+    <p style="margin-top:10px">78 Cup pelts you off the porch. You wake up on the lawn missing
+    <b style="color:var(--bad)">$${fine}</b> (it shook you down for quarters... somehow).
+    The Landlord stays defeated — stack cash back to $${RENT} and return to 932 to face 78 Cup again.</p>
+    <button class="mgBtn" id="b78Retry">WALK IT OFF</button>`;
+  $('b78Retry').onclick=closeModal;
+}
+function bossLose(){
+  if(cleanupFn){cleanupFn(); cleanupFn=null;}
+  const fine=Math.min(100,cash);
+  cash-=fine; updateHUD();
+  mBody.innerHTML=`<p class="big">EVICTED TO THE LAWN</p>
+    <p style="margin-top:10px">The Landlord tags you with one paper too many and bills you a
+    <b style="color:var(--bad)">$${fine} "processing fee."</b> Stack cash back to $${RENT} and rematch him at 932.</p>
+    <button class="mgBtn" id="bossRetry">WALK IT OFF</button>`;
+  $('bossRetry').onclick=closeModal;
+}
+
+/* =====================  MINIGAME FRAMEWORK  ===================== */
+const modal=$('modal'), mTitle=$('modalTitle'), mBody=$('modalBody');
+let cleanupFn=null;
+function openModal(title,html){
+  busy=true; keys={};
+  mTitle.textContent=title; mBody.innerHTML=html; modal.classList.add('active');
+}
+function closeModal(){
+  if(cleanupFn){cleanupFn(); cleanupFn=null;}
+  modal.classList.remove('active'); busy=false;
+}
+function resultScreen(p,ok,msg,bonus=0){
+  if(cleanupFn){cleanupFn(); cleanupFn=null;}
+  mBody.innerHTML=`<p class="big">${ok?'NICE!':'BUSTED'}</p><p style="margin-top:10px">${msg}</p>
+    <button class="mgBtn" id="mgClose">${ok?'COLLECT':'WALK IT OFF'}</button>`;
+  $('mgClose').onclick=()=>{ closeModal(); if(ok)award(p,bonus); };
+}
+
+function launchTask(p){
+  const t=TASKS[p.task];
+  const intro=`<p>${t.blurb}</p><p style="margin-top:8px">Payout: <b style="color:var(--good)">$${currentPay(p)}</b></p>
+    <button class="mgBtn" id="mgGo">START</button><button class="mgBtn alt" id="mgNo">NEVER MIND</button>`;
+  openModal(t.title,intro);
+  $('mgNo').onclick=closeModal;
+  $('mgGo').onclick=()=>MINIGAMES[p.task](p);
+}
+
+/* =====================  MINIGAMES  ===================== */
+const MINIGAMES={};
+
+/* ---- shared: mash game ---- */
+function mashGame(p,{goal,secs,verb,emoji}){
+  let count=0, done=false;
+  const end=Date.now()+secs*1000;
+  mBody.innerHTML=`<p>${emoji} ${verb} <b>${goal}</b> times in <b>${secs}s</b>! Mash the button or SPACE.</p>
+    <p class="big" id="mCount">0</p><div class="barOuter"><div class="barFill" id="mBar"></div></div>
+    <p class="timer" id="mTime"></p>
+    <button class="mgBtn" id="mashBtn" style="width:100%;padding:22px;">${emoji} ${verb.toUpperCase()}!</button>`;
+  const hit=()=>{ if(done)return; count++; $('mCount').textContent=count;
+    $('mBar').style.width=Math.min(100,count/goal*100)+'%'; };
+  $('mashBtn').onclick=hit;
+  const keyH=e=>{ if(e.code==='Space'){e.preventDefault();hit();} };
+  window.addEventListener('keydown',keyH);
+  const iv=setInterval(()=>{
+    const left=(end-Date.now())/1000;
+    $('mTime').textContent='TIME: '+Math.max(0,left).toFixed(1)+'s';
+    if(count>=goal){ done=true; clearInterval(iv); resultScreen(p,true,`Crushed it with ${left.toFixed(1)}s to spare.`); }
+    else if(left<=0){ done=true; clearInterval(iv); resultScreen(p,false,`Only ${count}/${goal}. Pace yourself next time.`); }
+  },100);
+  cleanupFn=()=>{ clearInterval(iv); window.removeEventListener('keydown',keyH); };
+}
+
+MINIGAMES.chores=p=>mashGame(p,{goal:20,secs:6,verb:'Rake',emoji:'🍂'});
+MINIGAMES.pizza=p=>{
+  const skinner=player.id==='skinner';
+  mashGame(p,{goal:skinner?30:42,secs:9,verb:'Chomp',emoji:'🍕'});
+  if(skinner) toast('Iron Stomach: fewer slices needed!',2000);
+};
+
+/* ---- timing bar: Dome haul ---- */
+MINIGAMES.haul=p=>{
+  const strong = player.powers.includes('strength');
+  const zoneW = strong?24:15;            // % width
+  let hits=0, tries=0, pos=0, dir=1, speed= strong?1.4:1.8, zone=30+Math.random()*40;
+  mBody.innerHTML=`<p>🏟️ Stop the lift in the green zone. Land <b>3 of 5</b> lifts.</p>
+    <p>Hits: <span class="big" id="hHits">0</span>/3 &nbsp; Attempts left: <span id="hTries">5</span></p>
+    <div class="barOuter" id="hBar"><div class="zone" id="hZone"></div><div class="cursor" id="hCur"></div></div>
+    <button class="mgBtn" id="hStop" style="width:100%;padding:18px;">⏹ LIFT! (or SPACE)</button>`;
+  const zEl=$('hZone'),cEl=$('hCur');
+  function setZone(){ zone=8+Math.random()*(84-zoneW); zEl.style.left=zone+'%'; zEl.style.width=zoneW+'%'; }
+  setZone();
+  const iv=setInterval(()=>{ pos+=dir*speed; if(pos>=98||pos<=0)dir*=-1; cEl.style.left=pos+'%'; },16);
+  const attempt=()=>{
+    tries++; const ok = pos>=zone && pos<=zone+zoneW;
+    if(ok){hits++; $('hHits').textContent=hits;}
+    $('hTries').textContent=5-tries;
+    setZone();
+    if(hits>=3){ clearInterval(iv); resultScreen(p,true,'Three clean lifts. The turf crew salutes you.'); }
+    else if(tries>=5){ clearInterval(iv); resultScreen(p,false,'Dropped too many. The equipment manager is unimpressed.'); }
+  };
+  $('hStop').onclick=attempt;
+  const keyH=e=>{ if(e.code==='Space'){e.preventDefault();attempt();} };
+  window.addEventListener('keydown',keyH);
+  cleanupFn=()=>{ clearInterval(iv); window.removeEventListener('keydown',keyH); };
+};
+
+/* ---- Simon beats: Bleu Monkey ---- */
+MINIGAMES.aux=p=>{
+  const musical = player.powers.includes('music');
+  const pads=[{c:'#F76900',e:'🥁'},{c:'#4CC36B',e:'🎸'},{c:'#2e8fd9',e:'🎹'},{c:'#c94cc3',e:'🎤'}];
+  let seq=[], round=0, inputIdx=0, accepting=false;
+  mBody.innerHTML=`<p>🎵 Watch the beat pads light up, then repeat the pattern. Survive <b>3 rounds</b>.</p>
+    <p>Round: <span class="big" id="aRound">1</span>/3</p><div class="padGrid" id="aPads"></div>`;
+  const grid=$('aPads');
+  pads.forEach((pd,i)=>{
+    const b=document.createElement('button'); b.className='beatPad'; b.style.background=pd.c; b.textContent=pd.e;
+    b.onclick=()=>tap(i); grid.appendChild(b);
+  });
+  const padEls=[...grid.children];
+  function flash(i,ms){ padEls[i].classList.add('lit'); setTimeout(()=>padEls[i].classList.remove('lit'),ms); }
+  function playSeq(){
+    accepting=false; inputIdx=0;
+    const gap = musical?650:480, lit = musical?420:300;
+    seq.forEach((s,k)=> setTimeout(()=>flash(s,lit), 500+k*gap));
+    setTimeout(()=>accepting=true, 500+seq.length*gap);
+  }
+  function nextRound(){
+    round++; $('aRound').textContent=round;
+    seq.push(Math.floor(Math.random()*4));
+    if(round===1){seq=[Math.floor(Math.random()*4),Math.floor(Math.random()*4),Math.floor(Math.random()*4)];}
+    playSeq();
+  }
+  function tap(i){
+    if(!accepting)return;
+    flash(i,180);
+    if(i===seq[inputIdx]){ inputIdx++;
+      if(inputIdx>=seq.length){
+        if(round>=3) resultScreen(p,true,'The bar chants your name. Aux secured.');
+        else setTimeout(nextRound,600);
+      }
+    } else resultScreen(p,false,'You played the wrong drop. Crowd switched to the jukebox.');
+  }
+  nextRound();
+  cleanupFn=()=>{};
+};
+
+/* ---- Quiz: Whitman ---- */
+const QPOOL=[
+  {q:'Debits increase which accounts?',a:['Assets & Expenses','Liabilities & Revenue','Equity only','None — debits decrease everything'],c:0},
+  {q:'Revenue − COGS = ?',a:['Net income','Gross profit','EBITDA','Operating cash flow'],c:1},
+  {q:'TAM stands for…',a:['Total Addressable Market','Tactical Asset Management','Targeted Ad Metric','Total Annual Margin'],c:0},
+  {q:'A two-sided marketplace\'s biggest early challenge?',a:['Office space','The chicken-and-egg problem','Trademark filing','Choosing a font'],c:1},
+  {q:'Which raises equity capital?',a:['Issuing bonds','Bank loan','Issuing stock','Buying inventory'],c:2},
+  {q:'Adjusting entries are made to…',a:['Hide losses','Match revenues & expenses to the period','Avoid taxes','Round numbers'],c:1},
+  {q:'CAC means…',a:['Customer Acquisition Cost','Capital Allocation Committee','Current Asset Coverage','Cash After Costs'],c:0},
+  {q:'High quick ratio means…',a:['Lots of inventory','Strong short-term liquidity','High debt','Fast revenue growth'],c:1},
+];
+MINIGAMES.case=p=>{
+  const smart=player.powers.includes('brain');
+  const qs=[...QPOOL].sort(()=>Math.random()-.5).slice(0,4);
+  const need= smart?3:4;
+  const perQ= smart?14:10;
+  let i=0,score=0,timer=null;
+  function ask(){
+    if(i>=qs.length){
+      if(score>=need) resultScreen(p,true,`${score}/4 — the judges hand you the envelope.`);
+      else resultScreen(p,false,`${score}/4 — needed ${need}. Hit the library and come back.`);
+      return;
+    }
+    const Q=qs[i]; let left=perQ;
+    mBody.innerHTML=`<p>📈 Q${i+1}/4 · Score ${score} · Need ${need}</p>
+      <p class="timer" id="qT">⏱ ${left}s</p><p style="margin-top:10px"><b>${Q.q}</b></p>
+      ${Q.a.map((t,k)=>`<button class="choice" data-k="${k}">${t}</button>`).join('')}`;
+    timer=setInterval(()=>{ left--; $('qT').textContent='⏱ '+left+'s';
+      if(left<=0){clearInterval(timer); i++; ask();} },1000);
+    mBody.querySelectorAll('.choice').forEach(b=>b.onclick=()=>{
+      clearInterval(timer);
+      if(+b.dataset.k===Q.c)score++;
+      i++; ask();
+    });
+  }
+  ask();
+  cleanupFn=()=>clearInterval(timer);
+};
+
+/* ---- Persuasion: OPR lease ---- */
+const PITCHES=[
+  {q:'Tour group: "The rent feels high for Ackerman."',
+   a:[{t:'"Utilities included, 5-min walk to Whitman, and the porch fits 30 people." ',ok:true},
+      {t:'"Everything is expensive, welcome to adulthood."',ok:false},
+      {t:'"You should see what OPR charges on Euclid."',ok:false}]},
+  {q:'"We heard maintenance requests get ignored…"',
+   a:[{t:'"48-hour response time is written into the lease — I\'ll show you the clause."',ok:true},
+      {t:'"You\'ll learn plumbing. It builds character."',ok:false},
+      {t:'"Define ignored."',ok:false}]},
+  {q:'"We want to think about it for a few weeks."',
+   a:[{t:'"Totally fair — two other groups tour tomorrow. Want me to hold it 24 hours, no deposit?"',ok:true},
+      {t:'"Fine, it\'ll be gone, whatever."',ok:false},
+      {t:'"Sign now or I start crying."',ok:false}]},
+];
+MINIGAMES.lease=p=>{
+  const closer=player.powers.includes('closer');
+  let i=0, wins=0;
+  function ask(){
+    if(i>=PITCHES.length){
+      if(wins===3) resultScreen(p,true,'Signed on the spot. OPR slides you a commission.');
+      else resultScreen(p,false,`Closed ${wins}/3 objections. They "will circle back."`);
+      return;
+    }
+    const P=PITCHES[i];
+    const opts=[...P.a].sort(()=>Math.random()-.5);
+    mBody.innerHTML=`<p>🤝 Objection ${i+1}/3 — pick the line that closes.</p>
+      <p style="margin-top:8px"><b>${P.q}</b></p>
+      ${opts.map((o,k)=>`<button class="choice" data-ok="${o.ok}">${closer&&o.ok?'⭐ ':''}${o.t}</button>`).join('')}
+      ${closer?'<p style="font-size:11px;color:#9fb0d6;margin-top:6px">⭐ Closer instinct highlights the winning line.</p>':''}`;
+    mBody.querySelectorAll('.choice').forEach(b=>b.onclick=()=>{
+      if(b.dataset.ok==='true')wins++;
+      i++; ask();
+    });
+  }
+  ask();
+  cleanupFn=()=>{};
+};
+
+/* ---- Order puzzle: porch fix ---- */
+MINIGAMES.porch=p=>{
+  const handy=player.powers.includes('handy');
+  const steps=['Jack up the beam','Pull rotten board','Cut new lumber','Screw in joist','Test with a keg'];
+  const showMs= handy?5000:3000;
+  mBody.innerHTML=`<p>🛠️ Memorize the repair order! It disappears in ${showMs/1000}s…</p>
+    <ol id="pList" style="margin:10px 0 0 22px;">${steps.map(s=>`<li>${s}</li>`).join('')}</ol>
+    <div id="pBtns" style="display:none"></div><p id="pMsg" style="margin-top:8px"></p>`;
+  const shuffled=[...steps].sort(()=>Math.random()-.5);
+  let idx=0, strikes=0;
+  const to=setTimeout(()=>{
+    $('pList').style.display='none';
+    const box=$('pBtns'); box.style.display='block';
+    box.innerHTML=`<p>Now click the steps in order (2 mistakes allowed):</p>`+
+      shuffled.map(s=>`<button class="stepBtn">${s}</button>`).join('');
+    box.querySelectorAll('.stepBtn').forEach(b=>b.onclick=()=>{
+      if(b.textContent===steps[idx]){ b.disabled=true; idx++;
+        if(idx>=steps.length) resultScreen(p,true,'Porch certified for at least two more darties.');
+      } else { strikes++; $('pMsg').textContent=`❌ Wrong step (${strikes}/2)`;
+        if(strikes>2) resultScreen(p,false,'You jacked the wrong beam. 318 sends thoughts and prayers.');
+      }
+    });
+  },showMs);
+  cleanupFn=()=>clearTimeout(to);
+};
+
+/* ---- Covid dodge: Margarita's ---- */
+MINIGAMES.covid=p=>{
+  mBody.innerHTML=`<p>🍹 Survive <b>20s</b> on the patio. Arrow keys / A-D (or tilt buttons) to move.
+    Catch 🍹 tips (+$10 each), dodge 🤧 cough clouds (3 hits = done). Mask up: 6 ft at all times!</p>
+    <canvas id="dodge" width="500" height="320"></canvas>
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <button class="mgBtn" id="dL" style="flex:1">◀</button>
+      <button class="mgBtn" id="dR" style="flex:1">▶</button>
+    </div>`;
+  const dc=$('dodge'), g=dc.getContext('2d');
+  const fast=player.powers.includes('speed');
+  let x=250, hearts=3, tips=0, objs=[], t0=Date.now(), over=false, dir=0;
+  const SPD= fast?7:4.6;
+  const keyH=e=>{ if(e.key==='ArrowLeft'||e.key==='a')dir=-1; if(e.key==='ArrowRight'||e.key==='d')dir=1; e.preventDefault&&e.preventDefault(); };
+  const upH=e=>{ if(['ArrowLeft','a','ArrowRight','d'].includes(e.key))dir=0; };
+  window.addEventListener('keydown',keyH); window.addEventListener('keyup',upH);
+  const hold=(el,d)=>{ el.addEventListener('pointerdown',e=>{e.preventDefault();dir=d;});
+    ['pointerup','pointerleave','pointercancel'].forEach(ev=>el.addEventListener(ev,()=>dir=0)); };
+  hold($('dL'),-1); hold($('dR'),1);
+  const iv=setInterval(()=>{
+    if(over)return;
+    const elapsed=(Date.now()-t0)/1000;
+    if(Math.random()<.07)objs.push({x:Math.random()*470+15,y:-10,v:2.5+Math.random()*2.5,kind:'cough'});
+    if(Math.random()<.035)objs.push({x:Math.random()*470+15,y:-10,v:2.2+Math.random()*1.5,kind:'tip'});
+    x=Math.max(18,Math.min(482,x+dir*SPD));
+    objs.forEach(o=>o.y+=o.v);
+    objs=objs.filter(o=>{
+      if(o.y>330)return false;
+      if(Math.abs(o.x-x)<26 && Math.abs(o.y-290)<26){
+        if(o.kind==='cough'){hearts--;} else {tips++;}
+        return false;
+      } return true;
+    });
+    g.fillStyle='#1a0f1f'; g.fillRect(0,0,500,320);
+    g.fillStyle='#2a7d52'; g.fillRect(0,308,500,12);
+    g.font='26px serif';
+    objs.forEach(o=>g.fillText(o.kind==='cough'?'🤧':'🍹',o.x-13,o.y));
+    g.fillText('😷',x-13,300);
+    g.font='14px "IBM Plex Mono"'; g.fillStyle='#F2E9D8';
+    g.fillText('❤'.repeat(Math.max(0,hearts))+`  tips:$${tips*10}  ${Math.max(0,20-elapsed).toFixed(0)}s`,10,20);
+    if(hearts<=0){ over=true; clearInterval(iv);
+      resultScreen(p,false,'Caught one cough cloud too many. Quarantine in the booth.'); }
+    else if(elapsed>=20){ over=true; clearInterval(iv);
+      resultScreen(p,true,`Patio survived, distance maintained.`,tips*10); }
+  },30);
+  cleanupFn=()=>{ clearInterval(iv); window.removeEventListener('keydown',keyH); window.removeEventListener('keyup',upH); };
+};
+
+/* ---- Fake ID Frogger: DJ's on the Hill ---- */
+MINIGAMES.frogger=p=>{
+  const fast=player.powers.includes('speed');
+  mBody.innerHTML=`<p>🪩 Cross the bar, grab a 🍸 at the top, and get back to the door —
+    bouncers 🕴️ are checking IDs. Touch one = ID check = lose a life (3 total).
+    Snag loose 🍺 for <b>+$15 each</b>. Arrows/WASD or the pad.</p>
+    <canvas id="dodge" width="500" height="400"></canvas>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px;max-width:240px;margin-left:auto;margin-right:auto;">
+      <span></span><button class="mgBtn" id="fU">▲</button><span></span>
+      <button class="mgBtn" id="fL">◀</button><button class="mgBtn" id="fD">▼</button><button class="mgBtn" id="fR">▶</button>
+    </div>`;
+  const dc=$('dodge'), g=dc.getContext('2d');
+  const SPD= fast?4.6:3.4;
+  let x=250, y=372, lives=3, hasDrink=false, beers=0, over=false;
+  const dirs={left:0,right:0,up:0,down:0};
+  /* 5 bouncer lanes between door (bottom) and bar (top) */
+  const lanes=[
+    {y:90,  v: 2.6, n:3},
+    {y:148, v:-3.2, n:3},
+    {y:206, v: 3.8, n:2},
+    {y:264, v:-2.9, n:3},
+    {y:322, v: 3.4, n:2},
+  ];
+  const bouncers=[];
+  lanes.forEach(L=>{ for(let i=0;i<L.n;i++)
+    bouncers.push({x:Math.random()*500, y:L.y, v:L.v*(0.85+Math.random()*.3)}); });
+  let loose=[]; // bonus beers drifting in lanes
+  function resetPos(){ x=250; y=372; }
+
+  const keymapF={ArrowLeft:'left',a:'left',ArrowRight:'right',d:'right',ArrowUp:'up',w:'up',ArrowDown:'down',s:'down'};
+  const keyH=e=>{ const d=keymapF[e.key]; if(d){dirs[d]=1; e.preventDefault();} };
+  const upH=e=>{ const d=keymapF[e.key]; if(d)dirs[d]=0; };
+  window.addEventListener('keydown',keyH); window.addEventListener('keyup',upH);
+  const hold=(id,d)=>{ const el=$(id);
+    el.addEventListener('pointerdown',e=>{e.preventDefault();dirs[d]=1;});
+    ['pointerup','pointerleave','pointercancel'].forEach(ev=>el.addEventListener(ev,()=>dirs[d]=0)); };
+  hold('fL','left'); hold('fR','right'); hold('fU','up'); hold('fD','down');
+
+  const iv=setInterval(()=>{
+    if(over)return;
+    /* move player */
+    x=Math.max(14,Math.min(486,x+(dirs.right-dirs.left)*SPD));
+    y=Math.max(20,Math.min(386,y+(dirs.down-dirs.up)*SPD));
+    /* bouncers patrol + wrap */
+    bouncers.forEach(b=>{ b.x+=b.v; if(b.x>530)b.x=-30; if(b.x<-30)b.x=530; });
+    /* spawn loose beers */
+    if(Math.random()<.012 && loose.length<3){
+      const L=lanes[Math.floor(Math.random()*lanes.length)];
+      loose.push({x:Math.random()<.5?-20:520, y:L.y, v:(Math.random()<.5?1:-1)*1.8});
+    }
+    loose.forEach(b=>b.x+=b.v);
+    loose=loose.filter(b=>b.x>-40&&b.x<540);
+    /* collisions */
+    for(const b of bouncers){
+      if(Math.abs(b.x-x)<24 && Math.abs(b.y-y)<26){
+        lives--; resetPos();
+        if(lives<=0){ over=true; clearInterval(iv);
+          resultScreen(p,false,'"This says you\'re 47." Confiscated. Escorted out. No pay.'); return; }
+        break;
+      }
+    }
+    loose=loose.filter(b=>{
+      if(Math.abs(b.x-x)<22 && Math.abs(b.y-y)<24){ beers++; return false; } return true;
+    });
+    /* reach the bar */
+    if(!hasDrink && y<52){ hasDrink=true; }
+    /* return to door with drink */
+    if(hasDrink && y>366){
+      over=true; clearInterval(iv);
+      resultScreen(p,true,`Drink secured, ID intact${beers?`, plus ${beers} loose beer${beers>1?'s':''} scooped off the floor`:''}.`,beers*15);
+      return;
+    }
+    /* ---- draw ---- */
+    g.fillStyle='#160b22'; g.fillRect(0,0,500,400);
+    /* bar counter (top) */
+    g.fillStyle='#6b4423'; g.fillRect(0,0,500,48);
+    g.font='22px serif'; for(let i=0;i<8;i++) g.fillText('🍸',18+i*62,34);
+    /* door zone (bottom) */
+    g.fillStyle='#23143a'; g.fillRect(0,360,500,40);
+    g.fillStyle='#F2E9D8'; g.font='11px "Press Start 2P"';
+    g.fillText(hasDrink?'GET TO THE DOOR!':'ENTRANCE',180,386);
+    /* dance floor lanes */
+    g.globalAlpha=.12; g.fillStyle='#9b59b6';
+    lanes.forEach((L,i)=>{ if(i%2)g.fillRect(0,L.y-24,500,48); });
+    g.globalAlpha=1;
+    /* disco ball */
+    g.font='26px serif'; g.fillText('🪩',238,72);
+    /* loose beers */
+    g.font='22px serif'; loose.forEach(b=>g.fillText('🍺',b.x-11,b.y+8));
+    /* bouncers */
+    g.font='30px serif'; bouncers.forEach(b=>g.fillText('🕴️',b.x-15,b.y+11));
+    /* player */
+    drawSprite(g, player.look, x, y+14, 1.5, Math.floor(performance.now()/120)%4, 1);
+    if(hasDrink){ g.font='16px serif'; g.fillText('🍸',x+8,y-12); }
+    /* HUD */
+    g.font='14px "IBM Plex Mono"'; g.fillStyle='#F2E9D8';
+    g.fillText('❤'.repeat(Math.max(0,lives))+`  🍺x${beers}`+(hasDrink?'  🍸 CARRYING':''),8,398);
+  },30);
+  cleanupFn=()=>{ clearInterval(iv); window.removeEventListener('keydown',keyH); window.removeEventListener('keyup',upH); };
+};
+
+MINIGAMES.dash=p=>{
+  closeModal();
+  const targets=PLACES.filter(t=>t.id!=='jimmy');
+  dashTarget=targets[Math.floor(Math.random()*targets.length)];
+  const secs= player.id==='rex'?16: player.id==='mark'?18:20;
+  dashDeadline=Date.now()+secs*1000;
+  dashP=p;
+  toast(`🚴 GO! Deliver to ${dashTarget.name} in ${secs}s!`,3000);
+};
+let dashP=null;
+function finishDash(ok){
+  const p=PLACES.find(x=>x.id==='jimmy');
+  dashTarget=null;
+  if(ok){ award(p); toast('🥪 Freaky fast indeed.'); }
+  else toast('⏱ Too slow — the sandwich is now a salad. No pay.',3500);
+}
+
+/* =====================================================================
+   PHASE 2 — "GET TO CLASS" : Mario-style sidescroller to Whitman
+   ===================================================================== */
+const P2={};            // namespace for phase-2 state
+const TILE=40;          // tile size (px in world units)
+
+/* Phase 2 level is built procedurally so geometry is always consistent. */
+const P2_GROUND_ROW=9;          // y = 9*TILE is the top of the ground (lower = more sky above)
+const P2_LEN=120;               // level length in tiles
+
+function buildLevel(){
+  P2.tiles=[]; P2.coins=[]; P2.enemies=[]; P2.bigs=[]; P2.checkpoints=[];
+  P2.goal=null; P2.otto=null; P2.oranges=[];
+  const GY=P2_GROUND_ROW*TILE;
+  P2.worldW=P2_LEN*TILE;
+  P2.start={x:1*TILE, y:GY-TILE};
+
+  // ground segments with deliberate pits (gaps between them)
+  const groundSegs=[[0,15],[18,30],[33,48],[51,64],[67,80],[83,98],[101,P2_LEN-1]];
+  groundSegs.forEach(([a,b])=>{ for(let c=a;c<=b;c++){
+    P2.tiles.push({x:c*TILE,y:GY,w:TILE,h:TILE});
+    P2.tiles.push({x:c*TILE,y:GY+TILE,w:TILE,h:TILE});
+  }});
+  // icy patches scattered along the route (slippery to walk on)
+  [ [10,12],[26,29],[44,47],[54,60],[70,73],[90,94],[110,114] ].forEach(([a,b])=>{
+    for(let c=a;c<=b;c++){ const t=P2.tiles.find(t=>t.x===c*TILE && t.y===GY); if(t)t.ice=true; }
+  });
+
+  // floating brick platforms [tileX, tileY(from ground), lengthTiles]
+  [[7,5,3],[22,4,3],[40,5,2],[57,5,2],[66,4,3],[85,5,2],[100,5,3],[110,4,3]]
+    .forEach(([a,ry,len])=>{ for(let c=a;c<a+len;c++) P2.tiles.push({x:c*TILE,y:ry*TILE,w:TILE,h:TILE,brick:true}); });
+
+  // coin (?) blocks
+  [[35,4],[36,4],[88,5]].forEach(([cx,ry])=>P2.tiles.push({x:cx*TILE,y:ry*TILE,w:TILE,h:TILE,q:true}));
+
+  // loose coins
+  [[10,5],[11,5],[12,5],[25,3],[26,3],[44,5],[45,5],[58,5],[59,5],[60,5],
+   [70,5],[71,5],[90,5],[91,5],[92,5],[104,4],[105,4],[112,3],[113,3]]
+    .forEach(([cx,ry])=>P2.coins.push({x:cx*TILE+TILE/2,y:ry*TILE+TILE/2,got:false}));
+
+  // small stompable enemies, seated on the ground (geese removed)
+  const dims={keg:{w:32,h:32,vx:-0.9},snow:{w:34,h:34,vx:-2.0}};
+  [[12,'keg'],[28,'snow'],[42,'keg'],[63,'snow'],
+   [72,'keg'],[90,'keg'],[104,'keg']]
+    .forEach(([cx,type])=>{ const d=dims[type];
+      P2.enemies.push({type,x:cx*TILE,y:GY-d.h,w:d.w,h:d.h,vx:d.vx,alive:true,vy:0,roll:0}); });
+
+  // big dodge obstacles (slightly shorter)
+  P2.bigs.push({type:'bus',    x:19*TILE, y:GY-62, w:118,h:62, vx:-1.6});
+  P2.bigs.push({type:'bus',    x:96*TILE, y:GY-62, w:118,h:62, vx:-1.8});
+  P2.bigs.push({type:'trolley',x:112*TILE,y:GY-64, w:138,h:64, vx: 1.4});
+
+  // checkpoints
+  [7,40,73].forEach(cx=>P2.checkpoints.push({x:cx*TILE+TILE/2, y:GY, reached:false}));
+
+  // 🍄 Mario mushroom power-up (floating, partway through the run)
+  P2.mushroom={x:48*TILE+TILE/2, y:(P2_GROUND_ROW-3)*TILE+TILE/2, got:false, bob:0};
+
+  // 🍊 Otto the Orange — Lakitu-style, hovers in a fixed mid-level zone dropping oranges
+  P2.otto={x:60*TILE, y:1.4*TILE, zoneA:52*TILE, zoneB:80*TILE, dir:1, dropT:0, bob:0, active:false};
+
+  // goal: Whitman at far right
+  P2.goal={x:(P2_LEN-3)*TILE, y:0, w:TILE, h:(P2_GROUND_ROW+1)*TILE};
+}
+
+function startPhase2(){
+  P2.charPick=true;
+  // reuse character select but route into phase 2
+  show('p2Screen');
+  buildLevel();
+  P2.coinCount=0; P2.hearts=3; P2.marioMode=false;
+  P2.spawn={...P2.start};
+  resetP2Player(true);
+  P2.lastTime=0; P2.running=true;
+  $('p2Name').textContent=player.face+' '+player.name;
+  updateP2HUD();
+  sizeP2();
+  requestAnimationFrame(p2Loop);
+  p2toast(`${player.name}, you slept through your alarm! Sprint to Whitman. ← → run, ⤴ jump. Stomp small stuff, DODGE the bus & trolley.`);
+}
+
+function resetP2Player(full){
+  P2.p={ x:P2.spawn.x, y:P2.spawn.y, w:30, h:38, vx:0, vy:0, onGround:false, face:1, inv:0, onIce:false };
+  if(full){ P2.hearts=3; }
+  P2.cam=0;
+}
+
+/* ---- input ---- */
+P2.keys={left:false,right:false,jump:false};
+const p2KeyMap={ArrowLeft:'left',a:'left',A:'left',ArrowRight:'right',d:'right',D:'right',
+  ArrowUp:'jump',w:'jump',W:'jump',' ':'jump'};
+function p2KeyDown(e){ const k=p2KeyMap[e.key]; if(k){ P2.keys[k]=true; e.preventDefault(); } }
+function p2KeyUp(e){ const k=p2KeyMap[e.key]; if(k){ P2.keys[k]=false; } }
+window.addEventListener('keydown',p2KeyDown);
+window.addEventListener('keyup',p2KeyUp);
+document.querySelectorAll('#p2pad .p2btn').forEach(b=>{
+  const k=b.dataset.k;
+  const on=e=>{e.preventDefault();P2.keys[k]=true;}, off=e=>{e.preventDefault();P2.keys[k]=false;};
+  b.addEventListener('pointerdown',on);
+  ['pointerup','pointerleave','pointercancel'].forEach(ev=>b.addEventListener(ev,off));
+});
+
+const p2c=$('p2canvas'), p2x=p2c.getContext('2d');
+let P2VW=900, P2VH=420;
+function sizeP2(){
+  const r=$('p2Wrap').getBoundingClientRect();
+  P2VW=Math.max(400,Math.floor(r.width)); P2VH=Math.max(260,Math.floor(r.height));
+  p2c.width=P2VW; p2c.height=P2VH;
+}
+window.addEventListener('resize',()=>{ if($('p2Screen').classList.contains('active')) sizeP2(); });
+
+let p2ToastMsg='', p2ToastT=0;
+function p2toast(m){ p2ToastMsg=m; p2ToastT=Date.now()+5200; }
+
+function updateP2HUD(){
+  $('p2Hearts').textContent='❤'.repeat(Math.max(0,P2.hearts))+'♡'.repeat(Math.max(0,3-P2.hearts));
+  $('p2Coins').textContent='🪙 '+P2.coinCount;
+  const prog=Math.max(0,Math.min(100,Math.round(P2.p.x/(P2.goal.x)*100)));
+  $('p2Dist').textContent=`→ WHITMAN ${prog}%`;
+}
+
+/* ---- physics helpers ---- */
+const GRAV=0.7, MOVE=0.7, MAXRUN=()=>4.2+(player?player.speed:2.6)*0.55, FRICT=0.78, ICEFRICT=0.96, JUMP=13.2;
+function aabb(a,b){ return a.x<b.x+b.w && a.x+a.w>b.x && a.y<b.y+b.h && a.y+a.h>b.y; }
+
+function p2Hurt(){
+  if(P2.p.inv>0) return;
+  P2.hearts--; P2.p.inv=90; updateP2HUD();
+  if(P2.hearts<=0){
+    p2toast('💀 You blacked out again — back to the last checkpoint.');
+    setTimeout(()=>{ P2.hearts=3; resetP2Player(false); updateP2HUD(); },350);
+  } else {
+    P2.p.vy=-7; P2.p.vx=-P2.p.face*4;
+  }
+}
+
+function p2Loop(ts){
+  if(!P2.running) return;
+  requestAnimationFrame(p2Loop);
+  const p=P2.p;
+  // ---- input/move ----
+  const max=MAXRUN();
+  if(P2.keys.left){ p.vx-=MOVE; p.face=-1; }
+  if(P2.keys.right){ p.vx+=MOVE; p.face=1; }
+  if(!P2.keys.left && !P2.keys.right){ p.vx*= p.onIce?ICEFRICT:FRICT; }
+  p.vx=Math.max(-max,Math.min(max,p.vx));
+  if(P2.keys.jump && p.onGround){ p.vy=-JUMP; p.onGround=false; }
+  // variable jump height
+  if(!P2.keys.jump && p.vy<-5) p.vy=-5;
+  p.vy+=GRAV; if(p.vy>16)p.vy=16;
+
+  // ---- horizontal collide ----
+  p.x+=p.vx;
+  for(const t of P2.tiles){ if(aabb(p,t)){
+    if(p.vx>0){ p.x=t.x-p.w; } else if(p.vx<0){ p.x=t.x+t.w; } p.vx=0;
+  }}
+  if(p.x<0)p.x=0;
+
+  // ---- vertical collide ----
+  p.onGround=false; p.onIce=false;
+  p.y+=p.vy;
+  for(const t of P2.tiles){ if(aabb(p,t)){
+    if(p.vy>0){ p.y=t.y-p.h; p.vy=0; p.onGround=true; if(t.ice)p.onIce=true; }
+    else if(p.vy<0){ p.y=t.y+t.h; p.vy=0;
+      if(t.q && !t.used){ t.used=true; t.q=false; P2.coinCount++; updateP2HUD(); p2spark(t.x+TILE/2,t.y); }
+    }
+  }}
+
+  // ---- fall in pit ----
+  if(p.y>P2VH+400){ p2Hurt(); if(P2.hearts>0){ resetP2Player(false); } }
+
+  // ---- checkpoints ----
+  for(const cp of P2.checkpoints){ if(!cp.reached && p.x>cp.x){ cp.reached=true;
+    P2.spawn={x:cp.x-15,y:cp.y-40}; p2toast('🚩 Checkpoint reached!'); } }
+
+  // ---- coins ----
+  for(const co of P2.coins){ if(!co.got && Math.abs((p.x+p.w/2)-co.x)<24 && Math.abs((p.y+p.h/2)-co.y)<26){
+    co.got=true; P2.coinCount++; updateP2HUD(); } }
+
+  // ---- 🍄 mushroom power-up ----
+  if(P2.mushroom && !P2.mushroom.got){
+    P2.mushroom.bob+=0.1;
+    if(Math.abs((p.x+p.w/2)-P2.mushroom.x)<26 && Math.abs((p.y+p.h/2)-P2.mushroom.y)<28){
+      P2.mushroom.got=true; P2.marioMode=true;
+      p.inv=Math.max(p.inv,60);
+      p2spark(P2.mushroom.x,P2.mushroom.y);
+      p2toast("🍄 SUPER STAR POWER! You're MARIO now — stomp the bus AND the trolley!");
+    }
+  }
+
+  // ---- small enemies (stompable): gravity + wall/ledge turning ----
+  for(const e of P2.enemies){ if(!e.alive) continue;
+    if(e.vy===undefined)e.vy=0;
+    // horizontal
+    e.x+=e.vx; if(e.type==='snow'){ e.roll+=e.vx*0.2; }
+    let turned=false;
+    for(const t of P2.tiles){ if(aabb(e,t)){
+      if(e.vx>0){ e.x=t.x-e.w; } else if(e.vx<0){ e.x=t.x+t.w; } e.vx*=-1; turned=true; break; } }
+    // gravity
+    e.vy+=GRAV; if(e.vy>14)e.vy=14; e.y+=e.vy;
+    let grounded=false, groundTop=0;
+    for(const t of P2.tiles){ if(aabb(e,t) && e.vy>=0){ e.y=t.y-e.h; e.vy=0; grounded=true; groundTop=t.y; break; } }
+    // ledge turn: if grounded, peek ahead for floor; if none, reverse
+    if(grounded && !turned){
+      const aheadX = e.vx>0 ? e.x+e.w+2 : e.x-2;
+      const footY = e.y+e.h+4;
+      let floorAhead=false;
+      for(const t of P2.tiles){ if(aheadX>t.x && aheadX<t.x+t.w && footY>t.y && footY<t.y+t.h+6){ floorAhead=true; break; } }
+      if(!floorAhead) e.vx*=-1;
+    }
+    if(e.x<0){ e.x=0; e.vx=Math.abs(e.vx); }
+    if(e.x>P2.worldW){ e.x=P2.worldW; e.vx=-Math.abs(e.vx); }
+    if(e.y>P2VH+600){ e.alive=false; continue; }
+    if(aabb(p,e)){
+      const stomp = p.vy>0 && (p.y+p.h)-e.y < 24;
+      if(stomp){ e.alive=false; p.vy=-9; P2.coinCount++; updateP2HUD(); p2spark(e.x+e.w/2,e.y); }
+      else p2Hurt();
+    }
+  }
+
+  // ---- big obstacles (dodge only — unless Mario mode lets you stomp them) ----
+  for(const b of P2.bigs){
+    if(b.squashed){ b.squashT--; if(b.squashT<=0){ b.x=P2.worldW+200; b.squashed=false; } continue; }
+    b.x+=b.vx;
+    if(b.x<-200) b.x=P2.worldW+100;
+    if(b.x>P2.worldW+200) b.x=-100;
+    if(aabb(p,b)){
+      const canStomp = P2.marioMode && p.vy>0 && (p.y+p.h)-b.y < 30;
+      if(canStomp){ b.squashed=true; b.squashT=40; p.vy=-12; P2.coinCount+=5; updateP2HUD();
+        p2spark(b.x+b.w/2,b.y); p2toast('💥 STOMPED the '+(b.type==='bus'?'CUSE BUS':'TROLLEY')+'! +5'); }
+      else p2Hurt();
+    }
+  }
+
+  // ---- 🍊 Otto the Orange (Lakitu-style, fixed mid-level zone) ----
+  if(P2.otto){ const o=P2.otto;
+    o.bob+=0.08;
+    // activate once the player nears his zone; stays active while in/near the zone
+    if(p.x > o.zoneA-200 && p.x < o.zoneB+200){ if(!o.active && !o.warned){ o.warned=true; p2toast("🍊 OTTO THE ORANGE incoming — dodge the oranges! (Mario mode can stomp them)"); } o.active=true; } else o.active=false;
+    if(o.active){
+      // hover toward a point above the player, clamped to his zone
+      const targetX=Math.max(o.zoneA, Math.min(o.zoneB, p.x+20));
+      o.x += Math.max(-2.4, Math.min(2.4, (targetX-o.x)*0.04));
+      o.y = 1.4*TILE + Math.sin(o.bob)*10;
+      // drop oranges on a timer
+      o.dropT--;
+      if(o.dropT<=0){ o.dropT=70 - Math.min(30, (p.x-o.zoneA)/20);   // drops a touch faster deeper in
+        P2.oranges.push({x:o.x, y:o.y+30, vy:0}); }
+    }
+  }
+  // oranges fall, hit player (or get stomped in Mario mode)
+  for(let i=(P2.oranges||[]).length-1;i>=0;i--){ const or=P2.oranges[i];
+    or.vy+=0.45; if(or.vy>11)or.vy=11; or.y+=or.vy;
+    // land on a tile -> splat/remove
+    let landed=false;
+    for(const tl of P2.tiles){ if(or.x>tl.x && or.x<tl.x+tl.w && or.y>tl.y && or.y<tl.y+10){ landed=true; break; } }
+    if(landed || or.y > (P2_GROUND_ROW+4)*TILE){ p2spark(or.x,or.y); P2.oranges.splice(i,1); continue; }
+    // collision with player
+    if(Math.abs(or.x-(p.x+p.w/2))<16 && Math.abs(or.y-(p.y+p.h/2))<20){
+      const canStomp = P2.marioMode && p.vy>0 && (p.y+p.h)-or.y < 22;
+      if(canStomp){ p.vy=-9; P2.coinCount++; updateP2HUD(); p2spark(or.x,or.y); P2.oranges.splice(i,1); }
+      else { P2.oranges.splice(i,1); p2Hurt(); }
+    }
+  }
+
+  // ---- reach goal ----
+  if(P2.goal && p.x+p.w>P2.goal.x+10 && p.y< P2.goal.y+P2.goal.h){
+    P2.running=false; return p2Win();
+  }
+
+  // inv tick
+  if(p.inv>0)p.inv--;
+
+  // ---- camera ----
+  P2.cam=Math.max(0,Math.min(P2.worldW-P2VW, p.x - P2VW*0.4));
+  // vertical: keep the ground near the bottom of the view (more sky above).
+  const groundBottom=(P2_GROUND_ROW+2)*TILE;            // y of bottom of the ground band
+  P2.camY=Math.max(0, groundBottom - P2VH + 24);        // shift world up so ground hugs bottom
+
+  p2Draw(ts);
+}
+
+/* ---- particles ---- */
+P2.parts=[];
+function p2spark(x,y){ for(let i=0;i<6;i++)P2.parts.push({x,y,vx:(Math.random()-.5)*4,vy:-Math.random()*4-1,t:24}); }
+
+function p2Draw(ts){
+  const g=p2x, cam=P2.cam, camY=P2.camY||0;
+  // sky (Syracuse winter grey-blue)
+  const sky=g.createLinearGradient(0,0,0,P2VH);
+  sky.addColorStop(0,'#3a4a66'); sky.addColorStop(1,'#7d8aa3');
+  g.fillStyle=sky; g.fillRect(0,0,P2VW,P2VH);
+  // falling snow (light)
+  const t=ts*0.04;
+  g.fillStyle='#ffffff99';
+  for(let i=0;i<26;i++){ const sx=((i*157 + t)%(P2VW+40))-20; const sy=((i*97 + t*1.3)%(P2VH)); g.fillRect(sx,sy,2,2); }
+  // distant buildings parallax, anchored to the ground line on screen
+  const groundScreenY=P2_GROUND_ROW*TILE - camY;
+  g.fillStyle='#2b3550';
+  for(let i=0;i<16;i++){ const bx=(((i*180)-(cam*0.3))%(P2.worldW)+P2.worldW)%(P2.worldW); g.fillRect(bx,groundScreenY-150,120,150); }
+
+  g.save(); g.translate(-cam,-camY);
+
+  // tiles
+  for(const tile of P2.tiles){
+    if(tile.x-cam < -TILE || tile.x-cam > P2VW+TILE) continue;
+    if(tile.q){ g.fillStyle='#e0a020'; g.fillRect(tile.x,tile.y,TILE,TILE);
+      g.fillStyle='#fff'; g.font='22px "Press Start 2P"'; g.fillText('?',tile.x+9,tile.y+30); }
+    else if(tile.brick){ g.fillStyle='#9a5b3a'; g.fillRect(tile.x,tile.y,TILE,TILE);
+      g.strokeStyle='#00000044'; g.strokeRect(tile.x+0.5,tile.y+0.5,TILE,TILE); }
+    else if(tile.ice){ g.fillStyle='#bfe6ff'; g.fillRect(tile.x,tile.y,TILE,TILE);
+      g.fillStyle='#ffffff66'; g.fillRect(tile.x,tile.y,TILE,6); }
+    else { // ground: snowy dirt
+      g.fillStyle='#5b4632'; g.fillRect(tile.x,tile.y,TILE,TILE);
+      g.fillStyle='#eef4ff'; g.fillRect(tile.x,tile.y,TILE,8); }
+  }
+
+  // coins
+  for(const co of P2.coins){ if(co.got)continue;
+    g.fillStyle='#ffd34d'; g.beginPath(); g.arc(co.x,co.y,9,0,7); g.fill();
+    g.fillStyle='#caa01f'; g.font='10px monospace'; g.fillText('$',co.x-3,co.y+4); }
+
+  // 🍄 mushroom power-up (pixel-drawn, gentle bob)
+  if(P2.mushroom && !P2.mushroom.got){
+    const m=P2.mushroom, by=m.y+Math.sin(m.bob)*4, s=3;
+    const mx=m.x-3*s;
+    const PX=(gx,gy,w,h,col)=>{ g.fillStyle=col; g.fillRect(mx+gx*s, by-5*s+gy*s, w*s, h*s); };
+    // cap (red with white spots)
+    PX(1,0,4,1,'#d22'); PX(0,1,6,2,'#d22'); PX(0,3,6,1,'#b81e1e');
+    PX(1,1,1,1,'#fff'); PX(4,1,1,1,'#fff'); PX(2,2,2,1,'#fff');
+    // stem
+    PX(1,4,4,3,'#f2e7c0'); PX(2,4,1,1,'#111'); PX(3,4,1,1,'#111'); // eyes
+  }
+
+  // checkpoint flags
+  for(const cp of P2.checkpoints){
+    g.fillStyle='#888'; g.fillRect(cp.x,cp.y-44,4,44);
+    g.fillStyle= cp.reached?'#4CC36B':'#E2504C'; g.fillRect(cp.x+4,cp.y-44,22,14); }
+
+  // goal: Whitman building (tall) with a door at ground level
+  if(P2.goal){ const G=P2.goal; const groundY=P2_GROUND_ROW*TILE;
+    const bx=G.x-10;                       // building left edge
+    // --- brick tower behind (left), darker, set back ---
+    const tw=58, th=6.2*TILE, tx=bx-30, ty=groundY-th;
+    g.fillStyle='#7a3b2c'; g.fillRect(tx,ty,tw,th);
+    g.fillStyle='#5e2c20'; g.fillRect(tx,ty,tw,8);                 // capstone shadow
+    // brick window grid
+    g.fillStyle='#b9c7d6';
+    for(let wy=0;wy<7;wy++)for(let wx=0;wx<3;wx++) g.fillRect(tx+8+wx*16, ty+18+wy*22, 10, 14);
+    // brick texture rows
+    g.fillStyle='#00000022'; for(let r=0;r<th/12;r++) g.fillRect(tx, ty+r*12, tw, 1);
+
+    // --- modern glass block (front, taller, the signature building) ---
+    const gw=TILE*3.0, gh=5.6*TILE, gx=bx, gy=groundY-gh;
+    // base curtain-wall fill (cool silver-blue glass)
+    const grad=g.createLinearGradient(gx,gy,gx+gw,gy+gh);
+    grad.addColorStop(0,'#aebfcf'); grad.addColorStop(0.5,'#8fa6ba'); grad.addColorStop(1,'#6f8aa0');
+    g.fillStyle=grad; g.fillRect(gx,gy,gw,gh);
+    // stepped top-right corner (the building's signature notch)
+    g.fillStyle='#3a4a66'; g.fillRect(gx+gw-26, gy, 26, 20);
+    // thin parapet line
+    g.fillStyle='#dde8f2'; g.fillRect(gx,gy,gw,4);
+    // horizontal glass banding (mullions) — the defining feature
+    g.fillStyle='#3f5168';
+    for(let yy=gy+12; yy<groundY-2; yy+=15){ g.fillRect(gx,yy,gw,2); }
+    // vertical mullions
+    g.fillStyle='#46586f';
+    for(let xx=gx+10; xx<gx+gw; xx+=22){ g.fillRect(xx,gy+4,1.5,gh-4); }
+    // subtle reflections (lighter glass panes scattered)
+    g.fillStyle='#cfe0f0aa';
+    for(let yy=gy+14; yy<groundY-20; yy+=45){ for(let xx=gx+12; xx<gx+gw-16; xx+=44){ g.fillRect(xx,yy,16,9); } }
+    // glass entrance atrium at ground level
+    g.fillStyle='#2b3a52'; g.fillRect(gx+gw/2-22, groundY-58, 44, 58);
+    g.fillStyle='#9fc4e8'; g.fillRect(gx+gw/2-18, groundY-52, 36, 40);     // lit glass doors
+    g.fillStyle='#46586f'; g.fillRect(gx+gw/2-1, groundY-52, 2, 52);       // door divider
+    // 📈 marker above the entrance
+    g.fillStyle='#ffd34d'; g.font='18px serif'; g.fillText('📈',gx+gw/2-9, groundY-64);
+    // WHITMAN sign
+    g.fillStyle='#fff'; g.font='10px "Press Start 2P"'; g.fillText('WHITMAN',gx-2, gy-10);
+  }
+
+  // small enemies
+  for(const e of P2.enemies){ if(!e.alive)continue;
+    g.font='30px serif';
+    const em = e.type==='keg'?'🛢️': e.type==='goose'?'🦢':'⚪';
+    if(e.type==='snow'){ g.fillStyle='#fff'; g.beginPath(); g.arc(e.x+e.w/2,e.y+e.h/2,e.w/2,0,7); g.fill();
+      g.strokeStyle='#bcd'; g.stroke(); }
+    else g.fillText(em,e.x,e.y+28);
+  }
+
+  // big obstacles
+  for(const b of P2.bigs){
+    if(b.squashed){ // flattened pancake after a Mario stomp
+      g.fillStyle= b.type==='bus'?'#ff8c2e':'#2e7d52';
+      g.fillRect(b.x, b.y+b.h-12, b.w, 12);
+      g.fillStyle='#fff'; g.font='9px "Press Start 2P"'; g.fillText('💥',b.x+b.w/2-8,b.y+b.h-2);
+      continue; }
+    if(b.type==='bus'){ g.fillStyle='#ff8c2e'; g.fillRect(b.x,b.y,b.w,b.h);
+      g.fillStyle='#0b1226'; g.fillRect(b.x+10,b.y+12,b.w-20,26);
+      g.fillStyle='#222'; g.beginPath(); g.arc(b.x+28,b.y+b.h,11,0,7); g.arc(b.x+b.w-28,b.y+b.h,11,0,7); g.fill();
+      g.fillStyle='#fff'; g.font='9px "Press Start 2P"'; g.fillText("CUSE BUS",b.x+18,b.y+58); }
+    else { g.fillStyle='#2e7d52'; g.fillRect(b.x,b.y,b.w,b.h);
+      g.fillStyle='#cfe'; g.fillRect(b.x+8,b.y+12,b.w-16,28);
+      g.fillStyle='#111'; g.beginPath(); g.arc(b.x+30,b.y+b.h,11,0,7); g.arc(b.x+b.w-30,b.y+b.h,11,0,7); g.fill();
+      g.fillStyle='#fff'; g.font='9px "Press Start 2P"'; g.fillText("TROLLEY",b.x+30,b.y+60); }
+  }
+
+  // 🍊 Otto the Orange (Lakitu-style) + falling oranges
+  if(P2.otto){ const o=P2.otto;
+    // his little cloud / hover platform
+    g.fillStyle='#dfe8f5'; g.beginPath();
+    g.arc(o.x-14,o.y+30,12,0,7); g.arc(o.x+14,o.y+30,12,0,7); g.arc(o.x,o.y+34,16,0,7); g.fill();
+    // Otto: round orange body with green leaf, face, arms, legs (mascot)
+    g.fillStyle='#f47b16'; g.beginPath(); g.arc(o.x,o.y+10,18,0,7); g.fill();   // orange head/body
+    g.fillStyle='#e06a0a'; g.beginPath(); g.arc(o.x,o.y+10,18,0.2,Math.PI-0.2); g.fill(); // shade bottom
+    g.fillStyle='#3a7d2c'; g.fillRect(o.x-3,o.y-12,6,8); g.fillStyle='#4CC36B'; g.fillRect(o.x-2,o.y-16,4,5); // green sprig
+    // face
+    g.fillStyle='#fff'; g.beginPath(); g.arc(o.x-6,o.y+6,4,0,7); g.arc(o.x+6,o.y+6,4,0,7); g.fill();
+    g.fillStyle='#111'; g.beginPath(); g.arc(o.x-5,o.y+6,2,0,7); g.arc(o.x+7,o.y+6,2,0,7); g.fill();
+    g.strokeStyle='#5a2a00'; g.lineWidth=2; g.beginPath(); g.arc(o.x,o.y+14,5,0.1,Math.PI-0.1); g.stroke(); // smile
+    // little blue arms/legs (mascot suit)
+    g.fillStyle='#1a55c8'; g.fillRect(o.x-22,o.y+8,6,4); g.fillRect(o.x+16,o.y+8,6,4);
+    g.fillRect(o.x-10,o.y+26,5,7); g.fillRect(o.x+5,o.y+26,5,7);
+  }
+  for(const or of (P2.oranges||[])){
+    g.fillStyle='#f47b16'; g.beginPath(); g.arc(or.x,or.y,9,0,7); g.fill();
+    g.fillStyle='#3a7d2c'; g.fillRect(or.x-1,or.y-11,2,3);
+  }
+
+  // particles
+  for(let i=P2.parts.length-1;i>=0;i--){ const pt=P2.parts[i]; pt.x+=pt.vx; pt.y+=pt.vy; pt.vy+=0.3; pt.t--;
+    g.fillStyle='#ffd34d'; g.fillRect(pt.x,pt.y,3,3); if(pt.t<=0)P2.parts.splice(i,1); }
+
+  g.restore();
+
+  // player (animated pixel sprite, drawn in screen space)
+  const p=P2.p;
+  const psx=p.x-cam, psy=p.y-(P2.camY||0);
+  if(!(p.inv>0 && Math.floor(ts/80)%2)){
+    let frame=0;
+    if(!p.onGround) frame=1;                              // jumping/falling = stride pose
+    else if(Math.abs(p.vx)>0.4){ P2.walk=(P2.walk||0)+0.25; frame=Math.floor(P2.walk)%4; }
+    if(P2.marioMode) drawMario(g, psx+p.w/2, psy+p.h, 2.4, frame, p.face<0?-1:1);
+    else drawSprite(g, player.look, psx+p.w/2, psy+p.h, 1.7, frame, p.face<0?-1:1);
+  }
+
+  // toast
+  if(Date.now()<p2ToastT){
+    g.fillStyle='#000c'; const tw=Math.min(P2VW-40,p2ToastMsg.length*7+24);
+    g.fillRect((P2VW-tw)/2,12,tw,30);
+    g.fillStyle='#F2E9D8'; g.font='12px "IBM Plex Mono"';
+    g.fillText(p2ToastMsg,(P2VW-tw)/2+12,32);
+  }
+}
+
+function p2Win(){
+  const bonus=P2.coinCount*25;
+  $('p2WinText').textContent=`${player.face} ${player.name} skidded through the Whitman doors just as class started — `+
+    `dodging the Cuse bus, the trolley, Otto the Orange's barrage, and a winter's worth of rolling snowballs. `+
+    `Collected ${P2.coinCount} coins for a $${bonus} style bonus. You made it to class!`;
+  show('p2WinScreen');
+}
+
+/* ---- wire up buttons ---- */
+$('phase2Btn').onclick=()=>{ $('unlockBanner').style.display='none'; renderChars(); setMode('class'); show('titleScreen'); window.scrollTo(0,0); };
+$('p2Quit').onclick=()=>{ P2.running=false; renderChars(); show('titleScreen'); };
+$('p2Replay').onclick=()=>{ startPhase2(); };
+$('p2Home').onclick=()=>{ P2.running=false; renderChars(); show('titleScreen'); };
+
+/* Phase 2 starts with a quick character re-pick from the unlocked roster */
+function pickForPhase2(){
+  // Build a lightweight chooser reusing the modal
+  openModal('PHASE 2 — PICK YOUR RUNNER',
+    `<p>Who's sprinting to class? (Speed matters — faster characters run faster.)</p>
+     <div id="p2pick" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:10px;"></div>`);
+  const box=$('p2pick');
+  CHARS.forEach(c=>{
+    if(c.locked && !rachaelUnlocked) return;
+    const b=document.createElement('button'); b.className='choice';
+    b.style.textAlign='center';
+    b.innerHTML=`${spriteImgTag(c,4)}<div style="font-family:'Press Start 2P';font-size:10px;color:var(--orange2);margin-top:4px">${c.name}</div><div style="font-size:10px;color:#9fb0d6">speed ${c.speed}</div>`;
+    b.onclick=()=>{ player=c; closeModal(); startPhase2(); };
+    box.appendChild(b);
+  });
+}
+
+</script>
+</body>
+</html>
